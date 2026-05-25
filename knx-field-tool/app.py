@@ -771,7 +771,8 @@ def _parse_cemi(cemi, source_ip=''):
             raw_value = list(npdu[2:])
 
         telegram_info = _build_telegram_info(
-            src_addr, dst_int, dst_addr, svc_name, raw_value, addr_type == 1
+            src_addr, dst_int, dst_addr, svc_name, raw_value, addr_type == 1,
+            ctrl1=ctrl1, ctrl2=ctrl2
         )
         _emit_telegram(telegram_info)
 
@@ -850,27 +851,43 @@ def _process_telegram(telegram):
         print(f'[monitor] _process_telegram error: {e}\n{traceback.format_exc()}', flush=True)
 
 
-def _build_telegram_info(src_addr, dst_int, dst_addr, service, raw_value, is_group):
-    """Build telegram info dict with GA name and decoded value."""
+def _build_telegram_info(src_addr, dst_int, dst_addr, service, raw_value, is_group,
+                         ctrl1=0xBC, ctrl2=0xE0):
+    """Build telegram info dict with GA name and decoded value.
+
+    ctrl1/ctrl2 are cEMI control bytes; defaults represent a first-attempt
+    standard frame, Low priority, group address destination (the most common
+    L_DATA.ind pattern on healthy KNX TP — ctrl1=0xBC, ctrl2=0xE0).
+    """
     ga_info = ga_lookup.get(dst_int, {}) if is_group else {}
     ga_name = ga_info.get('name', '')
-    dpt = ga_info.get('dpt', '')
-
+    dpt     = ga_info.get('dpt', '')
     decoded = _decode_value(raw_value, dpt)
 
     monitor_state['telegram_count'] += 1
 
+    # ctrl1 bit 6 (0x40): 0 = original frame, 1 = retransmission (sender had no ACK)
+    repeat     = bool(ctrl1 & 0x40)
+    # ctrl1 bits [4,3]: priority — 0=System 1=Alarm 2=Normal 3=Low
+    priority_n = (ctrl1 >> 3) & 0x03
+    # ctrl2 bits [6,4]: remaining hop count — 6=same line, decremented by each router
+    hop_count  = (ctrl2 >> 4) & 0x07
+
     return {
-        'timestamp': datetime.now().strftime('%H:%M:%S.%f')[:-3],
-        'source': src_addr,
-        'destination': dst_addr,
+        'timestamp':       datetime.now().strftime('%H:%M:%S.%f')[:-3],
+        'ts':              time.time(),
+        'source':          src_addr,
+        'destination':     dst_addr,
         'destination_int': dst_int,
-        'service': service,
-        'ga_name': ga_name,
-        'dpt': dpt,
-        'raw_value': str(raw_value) if raw_value is not None else '',
-        'decoded_value': decoded,
-        'count': monitor_state['telegram_count'],
+        'service':         service,
+        'ga_name':         ga_name,
+        'dpt':             dpt,
+        'raw_value':       str(raw_value) if raw_value is not None else '',
+        'decoded_value':   decoded,
+        'count':           monitor_state['telegram_count'],
+        'repeat':          repeat,
+        'priority_n':      priority_n,
+        'hop_count':       hop_count,
     }
 
 
@@ -980,6 +997,89 @@ def _reset_telegram_buffer():
     with _telegram_buffer_lock:
         _telegram_buffer.clear()
         _telegram_seq = 0
+
+
+# ── Bus metrics ────────────────────────────────────────────────────────────────
+
+@app.route('/api/monitor/metrics', methods=['GET'])
+def monitor_metrics():
+    """Compute KNX bus quality metrics from the current telegram buffer."""
+    from collections import Counter
+
+    with _telegram_buffer_lock:
+        tgs = list(_telegram_buffer)
+
+    n = len(tgs)
+    if n == 0:
+        return jsonify({'empty': True, 'total': 0})
+
+    # ── Time window & rate ────────────────────────────────────────────────────
+    ts_vals  = [t['ts'] for t in tgs if 'ts' in t]
+    duration = (max(ts_vals) - min(ts_vals)) if len(ts_vals) > 1 else 0
+    rate     = round(n / duration, 1) if duration > 0 else 0.0
+
+    # ── Repeat rate ───────────────────────────────────────────────────────────
+    repeat_count = sum(1 for t in tgs if t.get('repeat'))
+    repeat_rate  = round(repeat_count / n * 100, 1)
+
+    # ── Bus load estimate (KNX TP 9600 baud) ─────────────────────────────────
+    # A typical telegram occupies ~30 ms on the bus (frame tx ~22 ms +
+    # ACK slot ~4 ms + inter-frame gap ~4 ms) → theoretical max ~33 tg/s.
+    bus_load = round(min(rate / 33.0 * 100, 100.0), 1) if rate > 0 else 0.0
+
+    # ── Priority distribution ─────────────────────────────────────────────────
+    _prio = {0: 'System', 1: 'Alarm', 2: 'Normal', 3: 'Low'}
+    prio_counts = dict(Counter(_prio.get(t.get('priority_n', 3), 'Low') for t in tgs))
+
+    # ── Hop count distribution ────────────────────────────────────────────────
+    hop_counts = {str(k): v for k, v in Counter(t.get('hop_count', 6) for t in tgs).items()}
+
+    # ── Source analysis ───────────────────────────────────────────────────────
+    src_counter = Counter(t.get('source', '') for t in tgs if t.get('source'))
+    top_sources = [
+        {'source': s, 'count': c, 'pct': round(c / n * 100, 1)}
+        for s, c in src_counter.most_common(10)
+    ]
+
+    # Mark known/unknown against the loaded ETS project
+    known_ias = set()
+    if project_data:
+        for dev in project_data.get('devices', []):
+            ia = dev.get('individual_address', '')
+            if ia:
+                known_ias.add(ia)
+    for s in top_sources:
+        s['known'] = (s['source'] in known_ias) if known_ias else True
+
+    unknown_srcs = sorted({
+        t.get('source', '') for t in tgs
+        if t.get('source') and known_ias and t.get('source') not in known_ias
+    })
+
+    # ── Noisy sources: > 5 msg/s sustained AND > 20 % of all traffic ─────────
+    noisy = []
+    if duration > 0:
+        for s in top_sources:
+            if (s['count'] / duration) > 5 and s['pct'] > 20:
+                noisy.append(s['source'])
+
+    # ── Active group addresses ────────────────────────────────────────────────
+    active_gas = len({t.get('destination', '') for t in tgs if t.get('destination')})
+
+    return jsonify({
+        'total':           n,
+        'duration_s':      round(duration, 1),
+        'rate':            rate,
+        'repeat_count':    repeat_count,
+        'repeat_rate':     repeat_rate,
+        'bus_load_pct':    bus_load,
+        'priority':        prio_counts,
+        'hop_count':       hop_counts,
+        'top_sources':     top_sources,
+        'unknown_sources': unknown_srcs,
+        'noisy_sources':   noisy,
+        'active_gas':      active_gas,
+    })
 
 
 def _emit_safe(event, data):
