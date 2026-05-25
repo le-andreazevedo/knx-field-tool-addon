@@ -4,6 +4,7 @@ KNX_HOST=$(bashio::config 'knx_gateway_host')
 KNX_PORT=$(bashio::config 'knx_gateway_port')
 KNX_FOLDER=$(bashio::config 'knx_project_folder')
 KNX_FILE=$(bashio::config 'knx_project_file')
+KNX_TIMEOUT=$(bashio::config 'knx_ping_timeout')
 
 bashio::log.info "A iniciar KNX Field Tool..."
 bashio::log.info "Gateway KNX: ${KNX_HOST}:${KNX_PORT}"
@@ -21,6 +22,7 @@ export KNX_DEFAULT_HOST="${KNX_HOST}"
 export KNX_DEFAULT_PORT="${KNX_PORT}"
 export KNX_PROJECT_FOLDER="${KNX_FOLDER}"
 export KNX_PROJECT_FILE="${KNX_FILE}"
+export KNX_PING_TIMEOUT="${KNX_TIMEOUT}"
 
 # /config e o directorio raiz de configuracao do HA
 export KNX_CONFIG_DIR="/config"

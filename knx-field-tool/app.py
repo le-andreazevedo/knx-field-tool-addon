@@ -72,6 +72,12 @@ try:
 except (ValueError, TypeError):
     DEFAULT_KNX_PORT = 3671
 
+# Ping/diagnosis timeout — configured in add-on options (knx_ping_timeout)
+try:
+    KNX_PING_TIMEOUT = max(1, min(30, int(os.environ.get('KNX_PING_TIMEOUT', '') or 3)))
+except (ValueError, TypeError):
+    KNX_PING_TIMEOUT = 3
+
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path='')
 app.config['SECRET_KEY'] = 'knx-field-tool-secret'
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max upload
@@ -124,6 +130,7 @@ def get_config():
     return jsonify({
         'knx_default_host': DEFAULT_KNX_HOST,
         'knx_default_port': DEFAULT_KNX_PORT,
+        'knx_ping_timeout': KNX_PING_TIMEOUT,
         'knx_project_folder': KNX_PROJECT_FOLDER,
         'knx_project_file': KNX_PROJECT_FILE,
         'project_loaded': bool(project_data),
@@ -1205,7 +1212,7 @@ def ping_device():
     address = data.get('address', '').strip()
     host    = data.get('host', '').strip()
     port    = int(data.get('port', 3671))
-    timeout = min(float(data.get('timeout', 3.0)), 10.0)
+    timeout = float(KNX_PING_TIMEOUT)
 
     if not address:
         return jsonify({'error': 'Endereço individual inválido'}), 400
@@ -1262,7 +1269,7 @@ def diagnose_devices():
     data    = request.json or {}
     host    = data.get('host', '').strip()
     port    = int(data.get('port', 3671))
-    timeout = min(float(data.get('timeout', 3.0)), 8.0)
+    timeout = float(KNX_PING_TIMEOUT)
 
     if not project_data:
         return jsonify({'error': 'Sem projecto carregado'}), 400

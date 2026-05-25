@@ -622,21 +622,13 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
       <div class="card-body">
         <p style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6">
           Checks whether all devices in the ETS project are online.
-          Uses the active Group Monitor connection or enter the gateway IP below.
+          Gateway and timeout are read from add-on settings.
         </p>
 
-        <!-- Gateway config (shown when monitor is not connected) -->
-        <div id="diag-gw-row" class="diag-gw-row-wrap" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-          <label style="font-size:12px;color:var(--text3)">Gateway IP</label>
-          <input id="diag-host" type="text" inputmode="decimal" placeholder="10.0.0.1"
-            class="monitor-input" style="width:160px"
-            oninput="this.value=this.value.replace(/,/g,'.')">
-          <label style="font-size:12px;color:var(--text3)">Port</label>
-          <input id="diag-port" type="text" inputmode="numeric" value="3671"
-            class="monitor-input monitor-input-sm" style="width:80px">
-          <label style="font-size:12px;color:var(--text3)">Timeout (s)</label>
-          <input id="diag-timeout" type="text" inputmode="decimal" value="3"
-            class="monitor-input monitor-input-sm" style="width:60px">
+        <!-- Read-only info row — values come from add-on config -->
+        <div id="diag-info-row" style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;color:var(--text3)">
+          <span>🔌 Gateway: <strong id="diag-info-gw" style="color:var(--text2)">—</strong></span>
+          <span>⏱ Timeout: <strong id="diag-info-timeout" style="color:var(--text2)">3 s</strong></span>
         </div>
 
         <button class="btn btn-connect" id="diag-start-btn" onclick="startDiagnosis()" style="min-width:160px">
@@ -877,19 +869,16 @@ async function pingDevice(btn, ia) {
 // ─── Diagnosis ──────────────────────────────
 let diagRunning = false;
 
-function updateDiagGwRow() {
-  // Show gateway row only when monitor is not connected
-  const row = document.getElementById('diag-gw-row');
-  if (row) row.style.display = monitorConnected ? 'none' : 'flex';
-
-  // Pre-fill from monitor inputs
-  if (!monitorConnected) {
-    const mh = document.getElementById('mon-host');
-    const mp = document.getElementById('mon-port');
-    const dh = document.getElementById('diag-host');
-    const dp = document.getElementById('diag-port');
-    if (mh && dh && !dh.value) dh.value = mh.value;
-    if (mp && dp && !dp.value) dp.value = mp.value;
+function updateDiagInfo() {
+  const gwEl = document.getElementById('diag-info-gw');
+  if (!gwEl) return;
+  if (monitorConnected) {
+    gwEl.textContent = 'active Monitor connection';
+  } else if (window._gwHost) {
+    gwEl.textContent = window._gwHost + ':' + (window._gwPort || 3671);
+  } else {
+    gwEl.textContent = 'not configured';
+    gwEl.style.color = 'var(--error)';
   }
 }
 
@@ -909,14 +898,10 @@ async function startDiagnosis() {
     return;
   }
 
-  updateDiagGwRow();
+  updateDiagInfo();
 
-  const host    = (document.getElementById('diag-host') || {}).value?.trim() || '';
-  const port    = parseInt((document.getElementById('diag-port') || {}).value) || 3671;
-  const timeout = parseFloat((document.getElementById('diag-timeout') || {}).value) || 3;
-
-  if (!monitorConnected && !host) {
-    showToast('Enter the gateway IP or connect the Group Monitor', 'error');
+  if (!monitorConnected && !window._gwHost) {
+    showToast('Gateway not configured — check add-on Settings', 'error');
     return;
   }
 
@@ -933,8 +918,7 @@ async function startDiagnosis() {
   document.getElementById('diag-progress-sub').textContent =
     'Please wait, this may take a few seconds per device.';
 
-  const body = { timeout };
-  if (!monitorConnected && host) { body.host = host; body.port = port; }
+  const body = {};
 
   try {
     const r = await fetch('api/diagnose', {
@@ -1114,12 +1098,8 @@ function loadProjectData(data) {
     const mp = document.getElementById('mon-port');
     if (mh) mh.value = ip.host;
     if (mp) mp.value = ip.port;
-    const dh = document.getElementById('diag-host');
-    const dp = document.getElementById('diag-port');
-    if (dh) dh.value = ip.host;
-    if (dp) dp.value = ip.port;
   }
-  updateDiagGwRow();
+  updateDiagInfo();
 
   // Switch to project tab
   const projTab = document.querySelector('[data-panel="project"]');
@@ -2108,23 +2088,24 @@ fetch('api/config')
   .then(cfg => {
     window._gwHost = cfg.knx_default_host || '';
     window._gwPort = cfg.knx_default_port || 3671;
+    window._gwPingTimeout = cfg.knx_ping_timeout || 3;
+
+    // Update diagnosis info row
+    const diagGwEl = document.getElementById('diag-info-gw');
+    if (diagGwEl) diagGwEl.textContent = window._gwHost ? window._gwHost + ':' + window._gwPort : 'not configured';
+    const diagToEl = document.getElementById('diag-info-timeout');
+    if (diagToEl) diagToEl.textContent = window._gwPingTimeout + ' s';
 
     if (window._gwHost) {
-      // Pre-fill all IP fields
-      ['mon-host','diag-host'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = window._gwHost;
-      });
-      ['mon-port','diag-port'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = window._gwPort;
-      });
+      // Pre-fill monitor IP fields
+      const mh = document.getElementById('mon-host');
+      const mp = document.getElementById('mon-port');
+      if (mh) mh.value = window._gwHost;
+      if (mp) mp.value = window._gwPort;
 
-      // Hide the IP input rows — gateway comes from add-on config
+      // Hide the monitor IP input row — gateway comes from add-on config
       const monRow = document.getElementById('mon-gw-row');
       if (monRow) monRow.style.display = 'none';
-      const diagRow = document.getElementById('diag-gw-row');
-      if (diagRow) diagRow.style.display = 'none';
 
       // Show a small gateway badge in the monitor toolbar
       const toolbar = document.getElementById('monitor-toolbar');

@@ -1,6 +1,6 @@
 name: "KNX Field Tool"
 description: "Ferramenta de campo KNX — explorador de projecto ETS, monitor de grupo e diagnostico de instalacao."
-version: "1.14.0"
+version: "1.15.0"
 slug: "knx-field-tool"
 url: "https://github.com/le-andreazevedo/knx-field-tool-addon"
 init: false
@@ -35,12 +35,14 @@ options:
   knx_gateway_port: 3671
   knx_project_folder: "knx-field-tool"
   knx_project_file: ""
+  knx_ping_timeout: 3
 
 schema:
   knx_gateway_host: str
   knx_gateway_port: int
   knx_project_folder: str
   knx_project_file: str
+  knx_ping_timeout: int
 
 map:
   - config:ro   # /config — pasta config do HA (para o ficheiro .knxproj)
