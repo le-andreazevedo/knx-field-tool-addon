@@ -1020,25 +1020,24 @@ function renderDiagResults(results, aborted = false) {
     </div>
 
     ${online.length > 0 ? `
-    <details style="margin-bottom:10px">
-      <summary style="cursor:pointer;list-style:none;outline:none">
-        <div class="card-header" style="border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--success);user-select:none">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-          Online Devices (${online.length}) — click to expand
-        </div>
-      </summary>
-      <div class="card" style="margin-top:4px">
-        <div class="card-body" style="padding:0">
-          ${online.map(d => `
-            <div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border)">
-              <span style="width:8px;height:8px;border-radius:50%;background:var(--success);flex-shrink:0;display:inline-block"></span>
-              <span style="font-family:monospace;font-size:12px;color:var(--accent);font-weight:600;min-width:64px;flex-shrink:0">${d.address}</span>
-              <span style="flex:1;font-size:13px;color:var(--text2)">${escHtml(d.name)}</span>
-              ${d.manufacturer ? `<span style="font-size:11px;color:var(--text3)">${escHtml(d.manufacturer)}</span>` : ''}
-            </div>`).join('')}
-        </div>
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-header" style="color:var(--success);cursor:pointer;user-select:none"
+        onclick="const b=this.nextElementSibling,c=this.querySelector('.dchev');if(b.style.display==='block'){b.style.display='none';c.style.transform=''}else{b.style.display='block';c.style.transform='rotate(90deg)'}">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+        Online Devices (${online.length})
+        <span style="font-size:11px;color:var(--text3);font-weight:400;margin-left:2px">— click to expand</span>
+        <span class="dchev" style="margin-left:auto;color:var(--text3);font-size:10px;display:inline-block;transition:transform .2s">▶</span>
       </div>
-    </details>` : ''}
+      <div style="display:none">
+        ${online.map(d => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border)">
+            <span style="width:8px;height:8px;border-radius:50%;background:var(--success);flex-shrink:0;display:inline-block"></span>
+            <span style="font-family:monospace;font-size:12px;color:var(--accent);font-weight:600;min-width:64px;flex-shrink:0">${d.address}</span>
+            <span style="flex:1;font-size:13px;color:var(--text2)">${escHtml(d.name)}</span>
+            ${d.manufacturer ? `<span style="font-size:11px;color:var(--text3)">${escHtml(d.manufacturer)}</span>` : ''}
+          </div>`).join('')}
+      </div>
+    </div>` : ''}
   `;
 }
 
