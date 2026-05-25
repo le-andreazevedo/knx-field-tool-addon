@@ -538,10 +538,17 @@ async def _async_monitor(host, port, local_ip=None):
         svc = struct.unpack('!H', data[2:4])[0]
 
         if svc == 0x0420 and len(data) >= 10:   # TUNNELING_REQUEST
-            ch = data[6]
-            sn = data[7]
+            # KNX/IP connection header (4 bytes after the 6-byte KNXnet/IP header):
+            #   data[6]  = structure_length  (always 0x04)
+            #   data[7]  = channel_id        (assigned by gateway in CONNECT_RESPONSE)
+            #   data[8]  = sequence_counter
+            #   data[9]  = reserved (0x00)
+            #   data[10] = start of cEMI frame
+            ch = data[7]   # ← channel_id  (NOT data[6] which is structure_length = 0x04)
+            sn = data[8]   # ← sequence_counter
             if ch == channel_id:
                 # ACK immediately (TUNNELING_ACK 0x0421)
+                # Body: structure_length=4, channel_id, sequence_counter, status=0
                 ack_body = bytes([4, ch, sn, 0x00])
                 sock.sendto(_hdr(0x0421, ack_body), addr)
                 # cEMI frame starts at byte 10
