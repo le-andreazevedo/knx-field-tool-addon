@@ -1,0 +1,40 @@
+name: "KNX Field Tool"
+description: "Ferramenta de campo KNX — explorador de projecto ETS, monitor de grupo e diagnostico de instalacao."
+version: "1.2.0"
+slug: "knx-field-tool"
+url: "https://github.com/le-andreazevedo/knx-field-tool-addon"
+init: false
+arch:
+  - aarch64
+  - amd64
+  - armhf
+  - armv7
+  - i386
+
+homeassistant_api: false
+hassio_api: false
+
+ingress: true
+ingress_port: 8765
+ingress_stream: true
+panel_icon: "mdi:broadcast"
+panel_title: "KNX Field Tool"
+
+ports:
+  8765/tcp: null
+
+options:
+  knx_gateway_host: ""
+  knx_gateway_port: 3671
+  knx_project_folder: "knx-field-tool"
+  knx_project_file: ""
+
+schema:
+  knx_gateway_host: str
+  knx_gateway_port: int
+  knx_project_folder: str
+  knx_project_file: str
+
+map:
+  - config:ro   # /config — pasta config do HA (para o ficheiro .knxproj)
+  - data:rw     # /data   — armazenamento interno do add-on

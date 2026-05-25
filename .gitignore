@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyc
+*.pyd
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Dados locais / ficheiros de projecto
+*.knxproj
+
+# Ficheiros do editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Sistema operativo
+.DS_Store
+Thumbs.db

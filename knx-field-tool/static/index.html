@@ -1,0 +1,1996 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>KNX Field Tool</title>
+<!-- PWA / iOS home screen -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="KNX Tool">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#ffffff">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/favicon.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+:root {
+  --bg:      #eff2f7;
+  --bg2:     #ffffff;
+  --bg3:     #f8fafc;
+  --border:  #dde3ed;
+  --accent:  #1b4fc4;
+  --accent2: #0d9488;
+  --warn:    #d97706;
+  --error:   #dc2626;
+  --success: #16a34a;
+  --text:    #1a2236;
+  --text2:   #4a5568;
+  --text3:   #94a3b8;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --shadow:    0 2px 8px rgba(0,0,0,.08);
+  --shadow-lg: 0 8px 28px rgba(0,0,0,.14);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; }
+body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; font-size: 14px;
+  /* position:fixed;inset:0 pins body exactly to iframe viewport — more reliable than height:100% or dvh */
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+  /* iOS safe areas */
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  /* padding-bottom handled by #bottom-nav safe area */
+}
+
+/* ── Header ── */
+header { display: none; }
+.header-logo-img { height: 38px; width: auto; flex-shrink: 0; object-fit: contain; }
+.project-badge { background: var(--bg3); border: 1px solid var(--border); border-radius: 20px; padding: 4px 12px; font-size: 12px; color: var(--text2); display: none; }
+.project-badge.visible { display: block; }
+.project-badge strong { color: var(--accent); }
+.header-spacer { flex: 1; }
+#upload-btn { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all .15s; box-shadow: 0 1px 4px rgba(27,79,196,.3); }
+#upload-btn:hover { opacity: .9; box-shadow: 0 2px 8px rgba(27,79,196,.4); }
+#upload-btn:active { transform: scale(.97); }
+#file-input { display: none; }
+
+/* ── Tabs ── */
+nav { background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; gap: 0; padding: 0 12px; flex-shrink: 0; }
+.tab { padding: 13px 16px; font-size: 13px; font-weight: 500; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s; white-space: nowrap; }
+.tab:hover { color: var(--text2); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.tab .badge { background: var(--bg3); border-radius: 10px; padding: 1px 7px; font-size: 11px; margin-left: 6px; color: var(--text3); }
+.tab.active .badge { background: rgba(27,79,196,.1); color: var(--accent); }
+
+/* ── Main content ── */
+main { flex: 1; min-height: 0; overflow: hidden; display: flex; }
+.panel { flex: 1; overflow-y: auto; padding: 20px; display: none; }
+.panel.active { display: block; }
+.panel-split { flex: 1; overflow: hidden; display: none; flex-direction: row; }
+.panel-split.active { display: flex; }
+
+/* ── Welcome screen ── */
+#welcome { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
+.welcome-icon { font-size: 64px; opacity: .3; }
+.welcome-title { font-size: 28px; font-weight: 700; color: var(--text2); }
+.welcome-sub { color: var(--text3); max-width: 400px; text-align: center; line-height: 1.6; }
+.upload-drop { border: 2px dashed var(--border); border-radius: 12px; padding: 40px 60px; cursor: pointer; transition: all .2s; text-align: center; }
+.upload-drop:hover, .upload-drop.dragging { border-color: var(--accent); background: rgba(79,142,247,.05); }
+.upload-drop p { color: var(--text3); margin-top: 8px; font-size: 13px; }
+
+/* ── Loading overlay ── */
+#loading { display: none; position: fixed; inset: 0; background: rgba(255,255,255,.85); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center; flex-direction: column; gap: 16px; }
+#loading.visible { display: flex; }
+.spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text { color: var(--text2); font-size: 15px; }
+
+/* ── Cards & common ── */
+.card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px; box-shadow: var(--shadow-sm); }
+.card-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px; color: var(--text2); }
+.card-body { padding: 16px; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; }
+.stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 16px; box-shadow: var(--shadow-sm); }
+.stat-value { font-size: 28px; font-weight: 700; color: var(--accent); }
+.stat-label { font-size: 12px; color: var(--text3); margin-top: 4px; }
+.pill { display: inline-block; border-radius: 20px; padding: 2px 9px; font-size: 11px; font-weight: 600; }
+.pill-blue { background: rgba(27,79,196,.1); color: var(--accent); }
+.pill-green { background: rgba(22,163,74,.12); color: var(--success); }
+.pill-warn { background: rgba(217,119,6,.12); color: var(--warn); }
+.pill-red { background: rgba(220,38,38,.1); color: var(--error); }
+.pill-gray { background: var(--bg3); color: var(--text3); border: 1px solid var(--border); }
+.flag-row { display: inline-flex; gap: 3px; flex-shrink: 0; }
+.flag { display: inline-block; border-radius: 3px; padding: 1px 5px; font-size: 10px; font-weight: 700; font-family: monospace; }
+.flag-on  { background: rgba(22,163,74,.12); color: var(--success); border: 1px solid rgba(22,163,74,.25); }
+.flag-off { background: rgba(148,163,184,.12); color: var(--text3); border: 1px solid rgba(148,163,184,.2); }
+
+/* ── Search ── */
+.search-bar { background: var(--bg3); border: 1px solid var(--border); border-radius: 6px; padding: 8px 12px; color: var(--text); width: 100%; font-size: 13px; margin-bottom: 12px; }
+.search-bar:focus { outline: none; border-color: var(--accent); }
+
+/* ── Topology tree ── */
+.topo-area { margin-bottom: 8px; }
+.topo-area-header { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; box-shadow: var(--shadow-sm); }
+.topo-area-header:hover { border-color: var(--accent); background: rgba(27,79,196,.03); }
+.topo-area-content { padding-left: 20px; margin-top: 4px; }
+.topo-line { margin-bottom: 6px; }
+.topo-line-header { background: var(--bg3); border: 1px solid var(--border); border-radius: 7px; padding: 8px 12px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.topo-line-header:hover { background: var(--bg2); border-color: var(--accent); }
+.topo-line-content { padding-left: 20px; margin-top: 4px; }
+.device-row { background: var(--bg2); border: 1px solid var(--border); border-radius: 7px; margin-bottom: 4px; overflow: hidden; box-shadow: var(--shadow-sm); }
+.device-header { padding: 9px 12px; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.device-header:hover { background: rgba(27,79,196,.04); }
+.device-addr { font-family: monospace; font-size: 12px; color: var(--accent); min-width: 65px; font-weight: 600; }
+.device-desc { font-weight: 500; flex: 1; }
+.device-mfr { color: var(--text3); font-size: 12px; }
+.device-detail { padding: 0 12px 10px 12px; border-top: 1px solid var(--border); background: var(--bg3); display: none; }
+.device-detail.open { display: block; }
+.co-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12px; }
+.co-table th { text-align: left; padding: 6px 8px; color: var(--text3); font-weight: 600; border-bottom: 1px solid var(--border); background: var(--bg3); }
+.co-table td { padding: 5px 8px; border-bottom: 1px solid rgba(221,227,237,.7); vertical-align: top; }
+.co-table tr:last-child td { border-bottom: none; }
+.co-name { color: var(--text2); }
+.ga-chip { display: inline-flex; align-items: center; gap: 4px; background: rgba(27,79,196,.07); border: 1px solid rgba(27,79,196,.18); border-radius: 6px; padding: 3px 8px; margin: 2px; font-size: 11px; cursor: pointer; transition: all .15s; }
+.ga-chip:hover { background: rgba(27,79,196,.14); border-color: var(--accent); }
+.ga-chip .ga-addr { font-family: monospace; color: var(--accent); font-weight: 600; }
+.ga-chip .ga-name { color: var(--text2); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chevron { transition: transform .2s; display: inline-block; color: var(--text3); }
+.chevron.open { transform: rotate(90deg); }
+
+/* ── Buildings Tree ── */
+.bld-node { margin-bottom: 3px; }
+.bld-header { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.bld-header:hover { background: rgba(27,79,196,.05); }
+.bld-type-building > .bld-header   { background: var(--bg2); border: 1px solid var(--border); font-weight: 700; font-size: 14px; margin-bottom: 6px; box-shadow: var(--shadow-sm); border-radius: 8px; }
+.bld-type-building-part > .bld-header { background: var(--bg2); border: 1px solid var(--border); font-weight: 600; border-radius: 8px; }
+.bld-type-floor > .bld-header      { padding-left: 20px; font-weight: 600; color: var(--text2); }
+.bld-type-room > .bld-header,
+.bld-type-corridor > .bld-header   { padding-left: 36px; }
+.bld-type-board > .bld-header      { padding-left: 52px; background: rgba(217,119,6,.06); border: 1px solid rgba(217,119,6,.18); border-radius: 7px; }
+.bld-type-staircase > .bld-header,
+.bld-type-area > .bld-header       { padding-left: 36px; color: var(--text3); }
+.bld-content { padding-left: 0; }
+.bld-type-building > .bld-content  { padding-left: 0; }
+.bld-icon { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
+.bld-name { flex: 1; }
+.bld-devcount { color: var(--text3); font-size: 12px; }
+
+.bld-dev-list { padding: 4px 10px 4px 52px; display: flex; flex-direction: column; gap: 3px; }
+.bld-dev-row { background: var(--bg2); border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+.bld-dev-header { display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; }
+.bld-dev-header:hover { background: rgba(27,79,196,.04); }
+.bld-dev-ia { font-family: monospace; font-size: 11px; color: var(--accent); min-width: 58px; flex-shrink: 0; font-weight: 600; }
+.bld-dev-desc { font-size: 13px; flex: 1; }
+.bld-dev-model { font-size: 11px; color: var(--text3); }
+.bld-dev-detail { padding: 0 10px 8px 10px; border-top: 1px solid var(--border); background: var(--bg3); display: none; }
+.bld-dev-detail.open { display: block; }
+
+/* ── Cabinets ── */
+.cab-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px; overflow: hidden; box-shadow: var(--shadow-sm); }
+.cab-card-header { padding: 13px 16px; display: flex; align-items: center; gap: 10px; cursor: pointer; border-bottom: 1px solid var(--border); }
+.cab-card-header:hover { background: rgba(27,79,196,.04); }
+.cab-title { font-weight: 700; font-size: 14px; flex: 1; }
+.cab-breadcrumb { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.cab-devcount { color: var(--text3); font-size: 12px; flex-shrink: 0; }
+.cab-body { padding: 0; }
+.cab-empty { padding: 16px; color: var(--text3); font-size: 12px; font-style: italic; }
+
+/* ── Group Address Tree ── */
+.ga-tree { font-size: 13px; }
+.ga-range { margin-bottom: 4px; }
+.ga-range-header { padding: 8px 12px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.ga-range-header:hover { background: rgba(27,79,196,.05); }
+.ga-range-1 > .ga-range-header { background: var(--bg2); border: 1px solid var(--border); margin-bottom: 4px; box-shadow: var(--shadow-sm); }
+.ga-range-2 > .ga-range-header { padding-left: 24px; color: var(--text2); }
+.ga-range-3 > .ga-range-header { padding-left: 40px; color: var(--text3); font-weight: 500; }
+.ga-range-content { padding-left: 16px; }
+.ga-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px 6px 56px; border-radius: 6px; cursor: pointer; transition: background .1s; }
+.ga-item:hover { background: rgba(27,79,196,.05); }
+.ga-item .ga-addr-col { font-family: monospace; color: var(--accent); min-width: 80px; font-size: 12px; font-weight: 600; }
+.ga-item .ga-name-col { flex: 1; color: var(--text); }
+.ga-item .ga-dpt { color: var(--text3); font-size: 11px; }
+
+/* ── IP Connections ── */
+.ip-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 12px; box-shadow: var(--shadow-sm); }
+.ip-addr { font-family: monospace; font-size: 20px; font-weight: 700; color: var(--accent); }
+.ip-meta { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.ip-label { font-size: 12px; color: var(--text3); }
+.ip-value { font-size: 12px; color: var(--text2); }
+.ip-use-btn { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 14px; box-shadow: 0 1px 4px rgba(27,79,196,.25); }
+.ip-use-btn:hover { opacity: .9; }
+.ip-use-btn:active { transform: scale(.97); }
+
+/* ── Group Monitor ── */
+#monitor-panel { display: none; flex-direction: column; }
+#monitor-panel.active { display: flex; }
+.monitor-toolbar { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; }
+.monitor-input { background: var(--bg3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 13px; width: 180px; }
+.monitor-input:focus { outline: none; border-color: var(--accent); }
+.monitor-input-sm { width: 100px; }
+.btn { border: none; border-radius: 8px; padding: 9px 16px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; display: flex; align-items: center; gap: 6px; }
+.btn-connect { background: var(--success); color: #fff; box-shadow: 0 1px 4px rgba(22,163,74,.25); }
+.btn-connect:hover { opacity: .9; }
+.btn-connect:disabled { opacity: .4; cursor: not-allowed; }
+.btn-disconnect { background: var(--error); color: #fff; box-shadow: 0 1px 4px rgba(220,38,38,.2); }
+.btn-disconnect:hover { opacity: .9; }
+.btn-clear { background: var(--bg3); color: var(--text2); border: 1px solid var(--border); }
+.btn-clear:hover { border-color: var(--accent); color: var(--accent); background: rgba(27,79,196,.05); }
+.monitor-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text3); margin-left: auto; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text3); }
+.status-dot.connected { background: var(--success); box-shadow: 0 0 6px rgba(22,163,74,.5); }
+.status-dot.connecting { background: var(--warn); animation: pulse .8s infinite; }
+@keyframes pulse { 50% { opacity: .4; } }
+
+.monitor-filters { background: var(--bg3); border-bottom: 1px solid var(--border); padding: 8px 20px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.filter-input { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; color: var(--text); font-size: 12px; width: 220px; }
+.filter-input:focus { outline: none; border-color: var(--accent); }
+.filter-label { font-size: 12px; color: var(--text3); }
+.filter-count { font-size: 12px; color: var(--text3); margin-left: auto; }
+
+.telegram-table-wrap { flex: 1; overflow: hidden; position: relative; }
+.telegram-table-wrap table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.telegram-table-wrap thead th { background: var(--bg3); padding: 8px 12px; text-align: left; color: var(--text3); font-weight: 600; position: sticky; top: 0; z-index: 5; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.telegram-table-wrap tbody tr { border-bottom: 1px solid rgba(221,227,237,.6); transition: background .05s; }
+.telegram-table-wrap tbody tr:hover { background: rgba(27,79,196,.04); }
+.telegram-table-wrap td { padding: 5px 12px; vertical-align: middle; }
+.tg-time { font-family: monospace; color: var(--text3); white-space: nowrap; }
+.tg-src { font-family: monospace; color: var(--text3); }
+.tg-dst { font-family: monospace; color: var(--accent); font-weight: 600; }
+.tg-svc-W { color: var(--warn); font-weight: 600; }
+.tg-svc-R { color: var(--accent2); font-weight: 600; }
+.tg-svc-Resp { color: var(--success); font-weight: 600; }
+.tg-svc-O { color: var(--text3); }
+.tg-ganame { color: var(--text2); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tg-val { font-family: monospace; font-weight: 600; }
+.tg-dpt { color: var(--text3); font-size: 11px; }
+#scroll-anchor { height: 1px; }
+#scroll-container { overflow-y: auto; flex: 1; }
+
+/* ── Ping button ── */
+.ping-btn { background:none; border:none; cursor:pointer; padding:3px 4px;
+  display:inline-flex; align-items:center; flex-shrink:0; border-radius:50%;
+  touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+.ping-dot { width:9px; height:9px; border-radius:50%; background:var(--border);
+  display:inline-block; transition:background .2s, transform .2s; }
+.ping-btn:hover .ping-dot { background:var(--text3); }
+.ping-btn.pinging .ping-dot { background:var(--warn); animation:ping-pulse .7s infinite; }
+.ping-btn.online  .ping-dot { background:var(--success); transform:scale(1.2); }
+.ping-btn.offline .ping-dot { background:var(--error); }
+@keyframes ping-pulse { 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.5);opacity:.6} }
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+
+/* ── Empty states ── */
+.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px; color: var(--text3); gap: 12px; }
+.empty-icon { font-size: 40px; opacity: .3; }
+
+/* ── Toast ── */
+#toast { position: fixed; bottom: 20px; right: 20px; background: var(--text); color: #fff; border-radius: 10px; padding: 12px 18px; font-size: 13px; z-index: 200; transform: translateY(100px); opacity: 0; transition: all .3s; max-width: 360px; box-shadow: var(--shadow-lg); }
+#toast.show { transform: translateY(0); opacity: 1; }
+#toast.success { background: var(--success); }
+#toast.error { background: var(--error); }
+
+/* ── Write Dialog ── */
+#write-dialog { position:fixed; inset:0; background:rgba(15,20,40,.45); backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px); z-index:300; display:none; align-items:center; justify-content:center; }
+.wd-box { background:var(--bg2); border:1px solid var(--border); border-radius:16px;
+  padding:24px; min-width:320px; max-width:440px; width:90%; box-shadow:var(--shadow-lg); }
+.wd-addr { font-size:22px; font-weight:700; font-family:monospace; color:var(--accent); }
+.wd-meta { font-size:12px; color:var(--text3); margin-top:3px; }
+.wd-toggle-row { display:flex; gap:10px; justify-content:center; }
+.wd-toggle { flex:1; padding:14px; border-radius:10px; border:1.5px solid var(--border);
+  background:var(--bg3); color:var(--text2); cursor:pointer; font-size:16px; font-weight:700;
+  transition:all .15s; }
+.wd-toggle:hover { border-color:var(--accent); background:rgba(27,79,196,.06); }
+.wd-toggle.selected { border-color:var(--accent); background:var(--accent); color:#fff; box-shadow:0 2px 8px rgba(27,79,196,.3); }
+.wd-num-input { background:var(--bg3); border:1.5px solid var(--border); border-radius:10px;
+  padding:12px 16px; color:var(--text); font-size:24px; width:100%; text-align:center;
+  font-family:monospace; }
+.wd-num-input:focus { outline:none; border-color:var(--accent); background:#fff; }
+.wd-hint { font-size:11px; color:var(--text3); text-align:center; margin-top:6px; }
+.wd-enter-hint { font-size:12px; color:var(--text3); text-align:center; margin-top:6px; }
+.wd-ip-row { display:flex; align-items:center; gap:8px; margin-top:8px;
+  padding:9px 12px; background:var(--bg3); border:1px solid var(--border); border-radius:8px; }
+.wd-ip-input { flex:1; background:transparent; border:none; color:var(--text);
+  font-size:13px; font-family:monospace; }
+.wd-ip-input:focus { outline:none; }
+/* sending overlay on toggle buttons */
+.wd-toggle.sending { opacity:.5; pointer-events:none; }
+/* numeric send button */
+.wd-confirm-btn { width:100%; margin-top:14px; background:var(--accent); color:#fff;
+  border:none; border-radius:10px; padding:14px; font-size:16px; font-weight:700;
+  cursor:pointer; touch-action:manipulation; transition:all .15s;
+  box-shadow:0 2px 8px rgba(27,79,196,.3); }
+.wd-confirm-btn:active { opacity:.8; transform:scale(.98); }
+.wd-confirm-btn:disabled { opacity:.4; cursor:not-allowed; box-shadow:none; }
+.ga-chip.writable:hover { background:rgba(217,119,6,.1); border-color:var(--warn); cursor:pointer; }
+.ga-chip.writable:hover .ga-addr { color:var(--warn); }
+
+/* ══════════════════════════════════════════
+   TOUCH — prevent double-tap zoom delay
+══════════════════════════════════════════ */
+button, .tab, .ga-chip, .bld-header, .bld-dev-header,
+.topo-area-header, .topo-line-header, .device-header,
+.cab-card-header, .ga-item, .ga-range-header,
+.upload-drop, .ip-use-btn, .wd-toggle, .wd-confirm-btn {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(79,142,247,.15);
+}
+
+/* ── Bottom nav (desktop: hidden) ── */
+#bottom-nav { display: none; }
+
+/* ══════════════════════════════════════════
+   MOBILE  ≤ 768px
+══════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── Header: oculto ── */
+  header { display: none; }
+
+  /* ── Top nav: scrollable horizontal em mobile ── */
+  nav#nav-tabs {
+    display: flex;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding: 0 4px;
+  }
+  nav#nav-tabs::-webkit-scrollbar { display: none; }
+  .tab { padding: 10px 12px; font-size: 12px; white-space: nowrap; }
+
+  /* ── Bottom nav: HIDDEN — substituido por top nav ── */
+  #bottom-nav { display: none !important; }
+
+  /* ── Panels ── */
+  .panel { padding: 12px; }
+
+  /* ── Welcome ── */
+  .welcome-title { font-size: 20px; }
+  .welcome-sub { font-size: 13px; }
+  .upload-drop { padding: 28px 20px; }
+  .upload-drop .ios-hint { display: block; }
+  .upload-drop .desktop-hint { display: none; }
+
+  /* ── Stats ── */
+  .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .stat-value { font-size: 22px; }
+
+  /* ── Inputs — 16px prevents iOS zoom on focus ── */
+  .search-bar, .monitor-input, .filter-input,
+  .wd-num-input, .wd-ip-input { font-size: 16px !important; }
+
+  /* ── GA chips — bigger tap area ── */
+  .ga-chip { padding: 6px 10px; font-size: 12px; min-height: 32px; }
+  .ga-chip .ga-name { max-width: 140px; }
+
+  /* ── Buildings indentation: reduzida ── */
+  .bld-dev-list { padding-left: 8px; padding-right: 4px; }
+  .bld-type-floor > .bld-header      { padding-left: 16px; }
+  .bld-type-room > .bld-header,
+  .bld-type-corridor > .bld-header   { padding-left: 28px; }
+  .bld-type-board > .bld-header      { padding-left: 28px; }
+  .bld-type-staircase > .bld-header,
+  .bld-type-area > .bld-header       { padding-left: 28px; }
+
+  /* ── CO table: scroll horizontal ── */
+  .bld-dev-detail, .device-detail { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .co-table { min-width: 380px; }
+
+  /* ── Write dialog: sheet no fundo ── */
+  #write-dialog { align-items: flex-end; }
+  .wd-box {
+    max-width: 100%; width: 100%;
+    border-radius: 20px 20px 0 0;
+    padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+    max-height: 90dvh; overflow-y: auto;
+  }
+  .wd-toggle { padding: 16px; font-size: 17px; min-height: 54px; }
+  .wd-num-input { font-size: 28px; padding: 14px; }
+  .wd-confirm-btn { padding: 17px; font-size: 17px; min-height: 56px; margin-top: 16px; }
+  .wd-ip-row { margin-top: 10px; }
+
+  /* ── Monitor toolbar ── */
+  .monitor-toolbar { padding: 10px 12px; gap: 8px;
+    padding-bottom: calc(10px); }
+  .monitor-input { width: 120px; }
+  .monitor-input-sm { width: 65px; }
+  .monitor-status { margin-left: 0; }
+  .monitor-filters { padding: 8px 12px; flex-wrap: wrap; gap: 8px; }
+  .filter-input { width: 100%; order: -1; }
+  .filter-count { width: 100%; }
+
+  /* ── Telegram table ── */
+  #scroll-container { overflow-x: auto; padding-bottom: 8px; }
+  #telegram-table { min-width: 560px; }
+  .tg-ganame { max-width: 100px; }
+
+  /* ── Buttons ── */
+  .btn { padding: 10px 14px; min-height: 44px; }
+  .ip-use-btn { min-height: 44px; width: 100%; }
+
+  /* ── Toast ── */
+  #toast {
+    right: 12px; left: 12px;
+    bottom: 12px;
+    max-width: none;
+  }
+
+}
+
+/* ══════════════════════════════════════════
+   MOBILE PEQUENO  ≤ 480px
+══════════════════════════════════════════ */
+@media (max-width: 480px) {
+  header h1 span { display: none; }   /* só "KNX" */
+  .tab { padding: 10px 11px; font-size: 11px; }
+  .ga-item { padding: 8px 8px 8px 32px; }
+  .ga-item .ga-addr-col { min-width: 60px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text">A processar ficheiro...</div>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- Header -->
+<header>
+  <img src="/logo-header.png" alt="KNX Field Tool" class="header-logo-img">
+  <div class="project-badge" id="project-badge">
+    <strong id="badge-name">—</strong>
+  </div>
+  <div class="header-spacer"></div>
+  <!-- Upload removido: ficheiro configurado nas opcoes do add-on -->
+</header>
+
+<!-- Tabs -->
+<nav id="nav-tabs">
+  <div class="tab active" data-panel="project" onclick="switchTab(this)">Projecto <span class="badge" id="tab-project-badge"></span></div>
+  <div class="tab" data-panel="topology" onclick="switchTab(this)">Topologia <span class="badge" id="tab-topo-badge"></span></div>
+  <div class="tab" data-panel="buildings" onclick="switchTab(this)">Buildings <span class="badge" id="tab-bld-badge"></span></div>
+  <div class="tab" data-panel="cabinets" onclick="switchTab(this)">Cabinets <span class="badge" id="tab-cab-badge"></span></div>
+  <div class="tab" data-panel="ga" onclick="switchTab(this)">Endereços de Grupo <span class="badge" id="tab-ga-badge"></span></div>
+  <div class="tab" data-panel="monitor" onclick="switchTab(this)">Group Monitor</div>
+  <div class="tab" data-panel="diagnosis" onclick="switchTab(this)">Diagnóstico</div>
+</nav>
+
+<!-- Main content area -->
+<main>
+
+  <!-- Welcome -->
+  <div class="panel" id="panel-welcome" style="display:none">
+    <div id="welcome">
+      <div class="welcome-icon">📡</div>
+      <div class="welcome-title">KNX Field Tool</div>
+      <div class="welcome-sub">Carregue um ficheiro .knxproj para explorar a topologia, endereços de grupo e monitorizar telegramas KNX em tempo real.</div>
+      <div class="upload-drop" id="drop-zone"
+           ondragover="event.preventDefault(); this.classList.add('dragging')"
+           ondragleave="this.classList.remove('dragging')"
+           ondrop="handleDrop(event)">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#4f8ef7" stroke-width="1.5" style="margin:0 auto"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+        <div style="margin-top:12px; font-weight:600; color:var(--text2)">Arraste o ficheiro .knxproj aqui</div>
+        <p class="desktop-hint">ou clique em "Abrir .knxproj" no canto superior direito</p>
+        <p class="ios-hint" style="display:none">Toque em <strong style="color:var(--text2)">Abrir .knxproj</strong> no canto superior direito</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Project Info -->
+  <div class="panel active" id="panel-project">
+    <div id="project-content"></div>
+  </div>
+
+  <!-- Topology -->
+  <div class="panel" id="panel-topology">
+    <input class="search-bar" id="topo-search" type="text" placeholder="Pesquisar dispositivo, endereço individual, modelo..." oninput="filterTopology(this.value)">
+    <div id="topology-content"></div>
+  </div>
+
+  <!-- Buildings -->
+  <div class="panel" id="panel-buildings">
+    <input class="search-bar" id="bld-search" type="text" placeholder="Pesquisar divisão, dispositivo, quadro..." oninput="filterBuildings(this.value)">
+    <div id="buildings-content"></div>
+  </div>
+
+  <!-- Cabinets -->
+  <div class="panel" id="panel-cabinets">
+    <input class="search-bar" id="cab-search" type="text" placeholder="Pesquisar quadro, dispositivo, endereço individual..." oninput="filterCabinets(this.value)">
+    <div id="cabinets-content"></div>
+  </div>
+
+  <!-- Group Addresses -->
+  <div class="panel" id="panel-ga">
+    <input class="search-bar" id="ga-search" type="text" placeholder="Pesquisar endereço, nome, datapoint..." oninput="filterGA(this.value)">
+    <div id="ga-content"></div>
+  </div>
+
+  <!-- IP Connections -->
+  <div class="panel" id="panel-ip" style="display:none">
+    <div id="ip-content"></div>
+  </div>
+
+  <!-- Group Monitor -->
+  <div id="panel-monitor" id="panel-monitor" class="panel" style="padding:0; display:none; flex-direction:column;">
+
+    <!-- Toolbar -->
+    <div class="monitor-toolbar" id="monitor-toolbar">
+      <span id="mon-gw-row" style="display:contents"><label class="filter-label">Gateway IP</label>
+      <input class="monitor-input" id="mon-host" type="text" inputmode="decimal" placeholder="10.0.0.1" oninput="this.value=this.value.replace(/,/g,'.')">
+      <label class="filter-label">Port</label>
+      <input class="monitor-input monitor-input-sm" id="mon-port" type="text" inputmode="numeric" value="3671"></span>
+      <button class="btn btn-connect" id="btn-connect" onclick="monitorConnect()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        Ligar
+      </button>
+      <button class="btn btn-disconnect" id="btn-disconnect" onclick="monitorDisconnect()" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+        Desligar
+      </button>
+      <button class="btn btn-clear" onclick="clearTelegrams()">Limpar</button>
+      <div class="monitor-status">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-text">Desligado</span>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="monitor-filters">
+      <span class="filter-label">Filtro</span>
+      <input class="filter-input" id="mon-filter" type="text" placeholder="Endereço, nome de GA, serviço..." oninput="applyMonitorFilter()">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);cursor:pointer">
+        <input type="checkbox" id="chk-writes" onchange="applyMonitorFilter()" checked>Writes
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);cursor:pointer">
+        <input type="checkbox" id="chk-reads" onchange="applyMonitorFilter()" checked>Reads
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);cursor:pointer">
+        <input type="checkbox" id="chk-responses" onchange="applyMonitorFilter()" checked>Responses
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);cursor:pointer">
+        <input type="checkbox" id="chk-scroll" checked>Auto-scroll
+      </label>
+      <span class="filter-count" id="filter-count">0 telegramas</span>
+    </div>
+
+    <!-- Telegram table -->
+    <div id="scroll-container" style="flex:1;overflow-y:auto;">
+      <table id="telegram-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Hora</th>
+            <th>Origem</th>
+            <th>Destino</th>
+            <th>Serviço</th>
+            <th>Nome GA</th>
+            <th>Valor</th>
+            <th>DPT</th>
+          </tr>
+        </thead>
+        <tbody id="telegram-body"></tbody>
+      </table>
+      <div id="mon-empty" class="empty">
+        <div class="empty-icon">📻</div>
+        <div>Ligue ao gateway KNX para iniciar a monitorização</div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Diagnosis -->
+  <div class="panel" id="panel-diagnosis">
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header">🩺 Diagnóstico de Instalação</div>
+      <div class="card-body">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6">
+          Verifica se todos os dispositivos do projecto ETS se encontram online na instalação.
+          Utiliza a ligação activa do Group Monitor ou introduza o IP do gateway abaixo.
+        </p>
+
+        <!-- Gateway config (shown when monitor is not connected) -->
+        <div id="diag-gw-row" class="diag-gw-row-wrap" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+          <label style="font-size:12px;color:var(--text3)">Gateway IP</label>
+          <input id="diag-host" type="text" inputmode="decimal" placeholder="10.0.0.1"
+            class="monitor-input" style="width:160px"
+            oninput="this.value=this.value.replace(/,/g,'.')">
+          <label style="font-size:12px;color:var(--text3)">Port</label>
+          <input id="diag-port" type="text" inputmode="numeric" value="3671"
+            class="monitor-input monitor-input-sm" style="width:80px">
+          <label style="font-size:12px;color:var(--text3)">Timeout (s)</label>
+          <input id="diag-timeout" type="text" inputmode="decimal" value="3"
+            class="monitor-input monitor-input-sm" style="width:60px">
+        </div>
+
+        <button class="btn btn-connect" id="diag-start-btn" onclick="startDiagnosis()" style="min-width:160px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          Iniciar Diagnóstico
+        </button>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div id="diag-progress" style="display:none" class="card">
+      <div class="card-body" style="display:flex;align-items:center;gap:14px">
+        <div class="spinner" style="width:28px;height:28px;border-width:2px"></div>
+        <div>
+          <div id="diag-progress-text" style="font-size:14px;font-weight:600;color:var(--text2)">A verificar dispositivos…</div>
+          <div id="diag-progress-sub" style="font-size:12px;color:var(--text3);margin-top:2px">Aguarde, este processo pode demorar alguns segundos por dispositivo.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div id="diag-results" style="display:none"></div>
+  </div>
+
+<!-- Write dialog -->
+<div id="write-dialog" onclick="if(event.target===this)closeWriteDialog()">
+  <div class="wd-box">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:2px">
+      <div class="wd-addr" id="wd-title"></div>
+      <button onclick="closeWriteDialog()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;line-height:1;padding:0 0 0 12px;touch-action:manipulation">✕</button>
+    </div>
+    <div id="wd-ganame" style="font-size:13px;color:var(--text2);margin-top:2px"></div>
+    <div id="wd-coname" style="font-size:12px;color:var(--text3)"></div>
+    <div id="wd-conn-line" style="font-size:11px;color:var(--text3);margin-top:4px;margin-bottom:12px"></div>
+
+    <div id="wd-ip-area"></div>
+
+    <div id="wd-input-area" style="margin-top:10px"></div>
+
+    <div id="wd-status" style="min-height:22px;margin-top:10px;font-size:13px;text-align:center"></div>
+  </div>
+</div>
+
+</main>
+
+<!-- Bottom Navigation (mobile only — scrollable, all tabs) -->
+<nav id="bottom-nav">
+  <div id="bnav-project-info" style="display:none;align-items:center;padding:0 12px;font-size:11px;color:var(--accent);font-weight:600;white-space:nowrap;flex-shrink:0;border-right:1px solid var(--border);margin-right:4px">
+    <span id="bnav-project-name"></span>
+  </div>
+  <button class="bnav-item active" data-panel="project" onclick="switchTabByPanel('project')">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+    Projecto
+  </button>
+  <button class="bnav-item" data-panel="topology" onclick="switchTabByPanel('topology')">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>
+    Topologia
+  </button>
+  <button class="bnav-item" data-panel="buildings" onclick="switchTabByPanel('buildings')">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 7V5a2 2 0 00-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+    Buildings
+  </button>
+  <button class="bnav-item" data-panel="cabinets" onclick="switchTabByPanel('cabinets')">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="8" rx="1"/><rect x="2" y="13" width="20" height="8" rx="1"/><line x1="6" y1="7" x2="6.01" y2="7"/><line x1="6" y1="17" x2="6.01" y2="17"/></svg>
+    Cabinets
+  </button>
+  <button class="bnav-item" data-panel="ga" onclick="switchTabByPanel('ga')">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    Endereços
+  </button>
+  <button class="bnav-item" data-panel="monitor" onclick="switchTabByPanel('monitor')">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+    Monitor
+  </button>
+  <button class="bnav-item" data-panel="diagnosis" onclick="switchTabByPanel('diagnosis')">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+    Diagnóstico
+  </button>
+</nav>
+
+<script>
+// ─── State ─────────────────────────────────
+let projectLoaded = false;
+let writeProjectIPs = [];
+let _writeAddr = '';   // address currently open in write dialog
+let _writeDpt  = '';   // DPT currently open in write dialog
+let allTelegrams = [];
+let visibleTelegrams = [];
+let telegramCount = 0;
+const MAX_TELEGRAMS = 5000;
+let socket = null;
+let monitorConnected = false;
+
+// ─── Socket.IO ─────────────────────────────
+function initSocket() {
+  // Support HA Ingress path prefix
+  const _base = window.location.pathname.replace(/\/+$/, '');
+  socket = io({ path: _base + '/socket.io', transports: ['polling'] });
+
+  socket.on('connect', () => {
+    console.log('Socket connected');
+  });
+
+  socket.on('monitor_connected', (data) => {
+    setMonitorStatus('connected', `Ligado: ${data.host}:${data.port}${data.warning ? ' ⚠' : ''}`);
+    if (data.warning) showToast('⚠ ' + data.warning, 'warn');
+    document.getElementById('btn-connect').style.display = 'none';
+    document.getElementById('btn-disconnect').style.display = 'flex';
+    document.getElementById('mon-empty').style.display = 'none';
+    monitorConnected = true;
+    updateDiagGwRow();
+  });
+
+  socket.on('monitor_stopped', (data) => {
+    setMonitorStatus('disconnected', 'Desligado' + (data && data.reason ? ` (${data.reason})` : ''));
+    document.getElementById('btn-connect').style.display = 'flex';
+    document.getElementById('btn-disconnect').style.display = 'none';
+    monitorConnected = false;
+    updateDiagGwRow();
+  });
+
+  socket.on('monitor_error', (data) => {
+    showToast('Erro: ' + data.message, 'error');
+    setMonitorStatus('disconnected', 'Erro de ligação');
+    document.getElementById('btn-connect').style.display = 'flex';
+    document.getElementById('btn-disconnect').style.display = 'none';
+    monitorConnected = false;
+    updateDiagGwRow();
+  });
+
+  socket.on('telegram', (tg) => {
+    addTelegram(tg);
+  });
+}
+
+// ─── Tab switching ─────────────────────────
+function switchTab(tabEl) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  tabEl.classList.add('active');
+  const panelId = tabEl.dataset.panel;
+  // Sync bottom nav
+  document.querySelectorAll('.bnav-item[data-panel]').forEach(b => b.classList.remove('active'));
+  const bnavBtn = document.querySelector(`.bnav-item[data-panel="${panelId}"]`);
+  if (bnavBtn) bnavBtn.classList.add('active');
+  document.querySelectorAll('.panel').forEach(p => {
+    p.classList.remove('active');
+    p.style.display = '';
+  });
+  const panel = document.getElementById('panel-' + panelId);
+  if (panel) {
+    if (panelId === 'monitor') {
+      panel.style.display = 'flex';
+      panel.style.flexDirection = 'column';
+    } else {
+      panel.classList.add('active');
+    }
+  }
+}
+
+// ─── Ping device ────────────────────────────
+async function pingDevice(btn, ia) {
+  if (btn.classList.contains('pinging')) return;
+  btn.classList.remove('online', 'offline');
+  btn.classList.add('pinging');
+  btn.title = 'A verificar…';
+
+  const body = { address: ia };
+  // If no active monitor, try to get gateway from monitor toolbar
+  if (!monitorConnected) {
+    const host = (document.getElementById('mon-host') || {}).value?.trim();
+    const port = parseInt((document.getElementById('mon-port') || {}).value) || 3671;
+    if (host) { body.host = host; body.port = port; }
+  }
+
+  try {
+    const r = await fetch('api/ping_device', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    btn.classList.remove('pinging');
+    if (d.error && !d.online) {
+      btn.classList.add('offline');
+      btn.title = d.error;
+    } else if (d.online) {
+      btn.classList.add('online');
+      btn.title = `Online — ${ia}`;
+    } else {
+      btn.classList.add('offline');
+      btn.title = `Offline / sem resposta — ${ia}`;
+    }
+    setTimeout(() => {
+      btn.classList.remove('online', 'offline');
+      btn.title = 'Verificar se está online';
+    }, 10000);
+  } catch (e) {
+    btn.classList.remove('pinging');
+    btn.classList.add('offline');
+    btn.title = `Erro: ${e.message}`;
+  }
+}
+
+// ─── Diagnosis ──────────────────────────────
+let diagRunning = false;
+
+function updateDiagGwRow() {
+  // Show gateway row only when monitor is not connected
+  const row = document.getElementById('diag-gw-row');
+  if (row) row.style.display = monitorConnected ? 'none' : 'flex';
+
+  // Pre-fill from monitor inputs
+  if (!monitorConnected) {
+    const mh = document.getElementById('mon-host');
+    const mp = document.getElementById('mon-port');
+    const dh = document.getElementById('diag-host');
+    const dp = document.getElementById('diag-port');
+    if (mh && dh && !dh.value) dh.value = mh.value;
+    if (mp && dp && !dp.value) dp.value = mp.value;
+  }
+}
+
+async function startDiagnosis() {
+  if (diagRunning) return;
+
+  if (!projectLoaded) {
+    showToast('Carregue um ficheiro .knxproj primeiro', 'error');
+    return;
+  }
+
+  updateDiagGwRow();
+
+  const host    = (document.getElementById('diag-host') || {}).value?.trim() || '';
+  const port    = parseInt((document.getElementById('diag-port') || {}).value) || 3671;
+  const timeout = parseFloat((document.getElementById('diag-timeout') || {}).value) || 3;
+
+  if (!monitorConnected && !host) {
+    showToast('Introduza o IP do gateway ou ligue o Group Monitor', 'error');
+    return;
+  }
+
+  diagRunning = true;
+  const btn = document.getElementById('diag-start-btn');
+  btn.disabled = true;
+  document.getElementById('diag-progress').style.display = 'block';
+  document.getElementById('diag-results').style.display = 'none';
+  document.getElementById('diag-progress-text').textContent = 'A verificar dispositivos…';
+  document.getElementById('diag-progress-sub').textContent =
+    'Aguarde, este processo pode demorar alguns segundos por dispositivo.';
+
+  const body = { timeout };
+  if (!monitorConnected && host) { body.host = host; body.port = port; }
+
+  try {
+    const r = await fetch('api/diagnose', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const d = await r.json();
+
+    document.getElementById('diag-progress').style.display = 'none';
+
+    if (d.error) {
+      showToast('Erro: ' + d.error, 'error');
+    } else {
+      renderDiagResults(d.results || []);
+    }
+  } catch (e) {
+    document.getElementById('diag-progress').style.display = 'none';
+    showToast('Erro: ' + e.message, 'error');
+  } finally {
+    diagRunning = false;
+    btn.disabled = false;
+  }
+}
+
+function renderDiagResults(results) {
+  const el = document.getElementById('diag-results');
+  el.style.display = 'block';
+
+  const offline = results.filter(r => !r.online);
+  const online  = results.filter(r => r.online);
+  const total   = results.length;
+
+  if (total === 0) {
+    el.innerHTML = `<div class="card"><div class="card-body">
+      <div class="empty"><div class="empty-icon">📭</div><div>Sem dispositivos para verificar</div></div>
+    </div></div>`;
+    return;
+  }
+
+  const ts = new Date().toLocaleTimeString('pt-PT');
+
+  if (offline.length === 0) {
+    el.innerHTML = `
+      <div class="card">
+        <div class="card-body" style="text-align:center;padding:28px 20px">
+          <div style="font-size:48px;margin-bottom:12px">✅</div>
+          <div style="font-size:18px;font-weight:700;color:var(--success);margin-bottom:6px">
+            Todos os dispositivos estão online
+          </div>
+          <div style="font-size:13px;color:var(--text3)">${total} dispositivos verificados · ${ts}</div>
+          <div style="margin-top:16px;display:flex;justify-content:center;gap:16px;font-size:13px">
+            <span class="pill pill-green">✓ Online: ${online.length}</span>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // Some offline
+  el.innerHTML = `
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-body">
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+          <div style="font-size:15px;font-weight:700;color:var(--text2)">Resultado do Diagnóstico</div>
+          <span class="pill pill-green">✓ Online: ${online.length}</span>
+          <span class="pill pill-red">✗ Offline: ${offline.length}</span>
+          <span class="pill pill-gray">${total} total</span>
+          <span style="font-size:11px;color:var(--text3);margin-left:auto">${ts}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:10px">
+      <div class="card-header" style="color:var(--error)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Dispositivos Offline (${offline.length})
+      </div>
+      <div class="card-body" style="padding:0">
+        ${offline.map(d => `
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border)">
+            <span style="width:8px;height:8px;border-radius:50%;background:var(--error);flex-shrink:0;display:inline-block"></span>
+            <span style="font-family:monospace;font-size:12px;color:var(--accent);font-weight:600;min-width:64px;flex-shrink:0">${d.address}</span>
+            <span style="flex:1;font-size:13px;color:var(--text2)">${escHtml(d.name)}</span>
+            ${d.manufacturer ? `<span style="font-size:11px;color:var(--text3)">${escHtml(d.manufacturer)}</span>` : ''}
+            <span style="font-size:11px;color:var(--text3);flex-shrink:0">${escHtml(d.line || '')}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    ${online.length > 0 ? `
+    <details style="margin-bottom:10px">
+      <summary style="cursor:pointer;list-style:none;outline:none">
+        <div class="card-header" style="border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--success);user-select:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          Dispositivos Online (${online.length}) — clique para expandir
+        </div>
+      </summary>
+      <div class="card" style="margin-top:4px">
+        <div class="card-body" style="padding:0">
+          ${online.map(d => `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid var(--border)">
+              <span style="width:8px;height:8px;border-radius:50%;background:var(--success);flex-shrink:0;display:inline-block"></span>
+              <span style="font-family:monospace;font-size:12px;color:var(--accent);font-weight:600;min-width:64px;flex-shrink:0">${d.address}</span>
+              <span style="flex:1;font-size:13px;color:var(--text2)">${escHtml(d.name)}</span>
+              ${d.manufacturer ? `<span style="font-size:11px;color:var(--text3)">${escHtml(d.manufacturer)}</span>` : ''}
+            </div>`).join('')}
+        </div>
+      </div>
+    </details>` : ''}
+  `;
+}
+
+// ─── Bottom nav helpers ─────────────────────
+function switchTabByPanel(panelId) {
+  const tab = document.querySelector(`.tab[data-panel="${panelId}"]`);
+  if (tab) switchTab(tab);
+}
+
+// ─── File upload (desactivado no modo add-on HA) ────────────────────────────
+// O projecto ETS e configurado nas opcoes do add-on (knx_project_file)
+function handleFileSelect(input) {
+  showToast('Configure o ficheiro .knxproj nas opcoes do add-on', 'warn');
+}
+function handleDrop(event) { event.preventDefault(); }
+function uploadFile(file) {}
+
+// ─── Load project data into UI ─────────────
+function loadProjectData(data) {
+  projectLoaded = true;
+  const proj = data.project;
+
+  // Badge
+  document.getElementById('badge-name').textContent = proj.name || 'Projecto';
+  document.getElementById('project-badge').classList.add('visible');
+  // Mostrar nome no bottom-nav (mobile)
+  const bnavInfo = document.getElementById('bnav-project-info');
+  const bnavName = document.getElementById('bnav-project-name');
+  if (bnavInfo && bnavName) {
+    bnavName.textContent = proj.name || 'Projecto';
+    bnavInfo.style.display = 'flex';
+  }
+
+  // Tab badges (null-safe — alguns tabs podem ter sido removidos)
+  function setBadge(id, val) { const el = document.getElementById(id); if (el) el.textContent = val; }
+  setBadge('tab-project-badge', '');
+  setBadge('tab-topo-badge', proj.total_devices);
+  setBadge('tab-bld-badge', countSpaces(data.buildings || []));
+  setBadge('tab-cab-badge', (data.cabinets || []).length || '');
+  setBadge('tab-ga-badge', proj.total_group_addresses);
+  setBadge('tab-ip-badge', (data.ip_connections || []).length);
+
+  // Render sections
+  renderProjectInfo(proj, data);
+  renderTopology(data.topology || []);
+  renderBuildings(data.buildings || []);
+  renderCabinets(data.cabinets || []);
+  renderGATree(data.ga_tree || []);
+  renderIPConnections(data.ip_connections || []);
+
+  writeProjectIPs = data.ip_connections || [];
+
+  // Pre-fill monitor and diagnosis IP
+  if (data.ip_connections && data.ip_connections.length > 0) {
+    const ip = data.ip_connections[0];
+    const mh = document.getElementById('mon-host');
+    const mp = document.getElementById('mon-port');
+    if (mh) mh.value = ip.host;
+    if (mp) mp.value = ip.port;
+    const dh = document.getElementById('diag-host');
+    const dp = document.getElementById('diag-port');
+    if (dh) dh.value = ip.host;
+    if (dp) dp.value = ip.port;
+  }
+  updateDiagGwRow();
+
+  // Switch to project tab
+  const projTab = document.querySelector('[data-panel="project"]');
+  if (projTab) switchTab(projTab);
+}
+
+// ─── Project info ───────────────────────────
+function renderProjectInfo(proj, data) {
+  const c = document.getElementById('project-content');
+  const topo = data.topology || [];
+  const totalLines = topo.reduce((a, area) => a + area.lines.length, 0);
+
+  c.innerHTML = `
+    <div class="stat-grid" style="margin-bottom:20px">
+      <div class="stat-card"><div class="stat-value">${proj.total_devices || 0}</div><div class="stat-label">Dispositivos</div></div>
+      <div class="stat-card"><div class="stat-value">${proj.total_group_addresses || 0}</div><div class="stat-label">Endereços de Grupo</div></div>
+      <div class="stat-card"><div class="stat-value">${totalLines}</div><div class="stat-label">Linhas KNX</div></div>
+      <div class="stat-card"><div class="stat-value">${(data.ip_connections || []).length}</div><div class="stat-label">Ligações IP</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header">📋 Informação do Projecto</div>
+      <div class="card-body">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <tr><td style="padding:6px 0;color:var(--text3);width:180px">Nome</td><td style="padding:6px 0;font-weight:600">${proj.name || '—'}</td></tr>
+          <tr><td style="padding:6px 0;color:var(--text3)">Última modificação</td><td style="padding:6px 0">${proj.last_modified ? proj.last_modified.replace('T',' ').substring(0,19) : '—'}</td></tr>
+          <tr><td style="padding:6px 0;color:var(--text3)">Início do projecto</td><td style="padding:6px 0">${proj.project_start ? proj.project_start.replace('T',' ').substring(0,19) : '—'}</td></tr>
+          <tr><td style="padding:6px 0;color:var(--text3)">Versão ETS</td><td style="padding:6px 0">${proj.tool_version || '—'}</td></tr>
+          <tr><td style="padding:6px 0;color:var(--text3)">Endereçamento GA</td><td style="padding:6px 0"><span class="pill pill-blue">${proj.ga_style || 'ThreeLevel'}</span></td></tr>
+        </table>
+      </div>
+    </div>
+    ${(data.ip_connections || []).length > 0 ? `
+    <div class="card">
+      <div class="card-header">🌐 Ligações IP Detectadas</div>
+      <div class="card-body">
+        ${(data.ip_connections || []).map(ip => `
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
+            <span class="pill pill-green">${ip.type}</span>
+            <span style="font-family:monospace;color:var(--accent);font-weight:600">${ip.host}:${ip.port}</span>
+            ${ip.name ? `<span style="color:var(--text3)">${ip.name}</span>` : ''}
+            <button class="ip-use-btn" onclick="useIPForMonitor('${ip.host}', ${ip.port})" style="margin-left:auto">Usar no Monitor</button>
+          </div>`).join('')}
+      </div>
+    </div>` : ''}
+  `;
+}
+
+// ─── Topology ───────────────────────────────
+let topoData = [];
+function renderTopology(topology) {
+  topoData = topology;
+  renderTopologyFiltered(topology);
+}
+
+function renderTopologyFiltered(topology) {
+  const c = document.getElementById('topology-content');
+  if (!topology || topology.length === 0) {
+    c.innerHTML = '<div class="empty"><div class="empty-icon">🏗</div><div>Sem dados de topologia</div></div>';
+    return;
+  }
+  c.innerHTML = topology.map(area => renderArea(area)).join('');
+}
+
+function renderArea(area) {
+  const totalDevices = area.lines.reduce((a, l) => a + l.devices.length, 0);
+  return `
+    <div class="topo-area">
+      <div class="topo-area-header" onclick="toggleCollapse(this)">
+        <span class="chevron">▶</span>
+        <span>${area.address}</span>
+        <span style="flex:1">${area.name}</span>
+        <span class="pill pill-gray">${totalDevices} dispositivos</span>
+      </div>
+      <div class="topo-area-content" style="display:none">
+        ${area.lines.map(line => renderLine(line, area.address)).join('')}
+      </div>
+    </div>`;
+}
+
+function renderLine(line, areaAddr) {
+  return `
+    <div class="topo-line">
+      <div class="topo-line-header" onclick="toggleCollapse(this)">
+        <span class="chevron">▶</span>
+        <span style="font-family:monospace;color:var(--accent);min-width:50px">${areaAddr}.${line.address}</span>
+        <span style="flex:1">${line.name}</span>
+        <span class="pill pill-gray">${line.devices.length} disp.</span>
+      </div>
+      <div class="topo-line-content" style="display:none">
+        ${line.devices.length === 0 ? '<div style="padding:8px;color:var(--text3);font-size:12px">Sem dispositivos</div>' :
+          line.devices.map(dev => renderDevice(dev)).join('')}
+      </div>
+    </div>`;
+}
+
+function renderFlags(flags) {
+  if (!flags) return '';
+  return `<span class="flag-row">${['Adr','Par','Grp','Cfg'].map(f =>
+    `<span class="flag ${flags[f] ? 'flag-on' : 'flag-off'}">${f}</span>`
+  ).join('')}</span>`;
+}
+
+function renderDevice(dev) {
+  const hasDetails = dev.com_objects && dev.com_objects.length > 0;
+
+  return `
+    <div class="device-row">
+      <div class="device-header" onclick="toggleDevice(this, ${hasDetails})">
+        <button class="ping-btn" title="Verificar se está online" onclick="event.stopPropagation();pingDevice(this,'${dev.individual_address}')"><span class="ping-dot"></span></button>
+        <span class="device-addr">${dev.individual_address}</span>
+        <span class="chevron" style="color:var(--text3)">${hasDetails ? '▶' : ''}</span>
+        <span class="device-desc">${dev.description || dev.name || '—'}</span>
+        <span class="device-mfr">${dev.manufacturer}</span>
+        ${dev.model ? `<span class="pill pill-blue" style="font-size:11px">${dev.model}</span>` : ''}
+        ${renderFlags(dev.flags)}
+      </div>
+      ${hasDetails ? `
+      <div class="device-detail">
+        ${dev.order_number ? `<div style="font-size:11px;color:var(--text3);padding:6px 0">Order: ${dev.order_number}</div>` : ''}
+        <table class="co-table">
+          <thead><tr><th>Objecto de Comunicação</th><th>Endereços de Grupo</th></tr></thead>
+          <tbody>
+            ${dev.com_objects.map(co => `
+              <tr>
+                <td class="co-name">${escHtml(co.name)}</td>
+                <td>${co.linked_gas.map(ga => `
+                  <span class="ga-chip" onclick="goToGA('${ga.address}')" title="${escHtml(ga.name)}">
+                    <span class="ga-addr">${ga.address}</span>
+                    <span class="ga-name">${escHtml(ga.name)}</span>
+                    ${ga.dpt ? `<span class="pill pill-gray" style="font-size:10px">${ga.dpt.replace('DPST-','')}</span>` : ''}
+                  </span>`).join('')}
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>` : ''}
+    </div>`;
+}
+
+function toggleDevice(el, hasDetails) {
+  if (!hasDetails) return;
+  const chevron = el.querySelector('.chevron');
+  const detail = el.nextElementSibling;
+  if (!detail) return;
+  const isOpen = detail.classList.contains('open');
+  detail.classList.toggle('open', !isOpen);
+  if (chevron) chevron.classList.toggle('open', !isOpen);
+}
+
+function filterTopology(query) {
+  if (!query.trim()) {
+    renderTopologyFiltered(topoData);
+    return;
+  }
+  const q = query.toLowerCase();
+  const filtered = topoData.map(area => ({
+    ...area,
+    lines: area.lines.map(line => ({
+      ...line,
+      devices: line.devices.filter(dev =>
+        (dev.individual_address || '').toLowerCase().includes(q) ||
+        (dev.description || '').toLowerCase().includes(q) ||
+        (dev.name || '').toLowerCase().includes(q) ||
+        (dev.manufacturer || '').toLowerCase().includes(q) ||
+        (dev.model || '').toLowerCase().includes(q) ||
+        dev.com_objects.some(co =>
+          co.name.toLowerCase().includes(q) ||
+          co.linked_gas.some(ga => ga.name.toLowerCase().includes(q) || ga.address.includes(q))
+        )
+      )
+    })).filter(line => line.devices.length > 0 || line.name.toLowerCase().includes(q))
+  })).filter(area => area.lines.length > 0);
+
+  renderTopologyFiltered(filtered);
+  // Auto-expand all when filtering
+  setTimeout(() => {
+    document.querySelectorAll('.topo-area-content, .topo-line-content').forEach(el => {
+      el.style.display = 'block';
+    });
+    document.querySelectorAll('.chevron').forEach(ch => ch.classList.add('open'));
+  }, 50);
+}
+
+// ─── Cabinets ───────────────────────────────
+let cabinetsData = [];
+
+function renderCabinets(cabinets) {
+  cabinetsData = cabinets;
+  _renderCabinets(cabinets);
+}
+
+function _renderCabinets(cabinets) {
+  const c = document.getElementById('cabinets-content');
+  if (!cabinets || cabinets.length === 0) {
+    c.innerHTML = '<div class="empty"><div class="empty-icon">⚡</div><div>Sem quadros eléctricos (DistributionBoard) configurados neste projecto</div></div>';
+    return;
+  }
+  c.innerHTML = cabinets.map(cab => renderCabinet(cab)).join('');
+}
+
+function renderCabinet(cab) {
+  const bc = cab.breadcrumb && cab.breadcrumb.length > 0
+    ? `<div class="cab-breadcrumb">${cab.breadcrumb.map(escHtml).join(' › ')}</div>`
+    : '';
+  const devCount = cab.devices.length;
+  const hasDevices = devCount > 0;
+
+  return `
+    <div class="cab-card">
+      <div class="cab-card-header" onclick="toggleCollapse(this)">
+        <span class="chevron" style="color:var(--text3)">${hasDevices ? '▶' : ''}</span>
+        <span style="font-size:16px">⚡</span>
+        <div style="flex:1;min-width:0">
+          <div class="cab-title">${escHtml(cab.name)}</div>
+          ${bc}
+        </div>
+        <span class="cab-devcount">${devCount} disp.</span>
+      </div>
+      <div class="cab-body" style="display:none">
+        ${hasDevices ? renderBldDevices(cab.devices) : `<div class="cab-empty">Sem dispositivos directamente neste quadro</div>`}
+      </div>
+    </div>`;
+}
+
+function filterCabinets(query) {
+  if (!query.trim()) { _renderCabinets(cabinetsData); return; }
+  const q = query.toLowerCase();
+  const filtered = cabinetsData.filter(cab =>
+    cab.name.toLowerCase().includes(q) ||
+    cab.breadcrumb.some(b => b.toLowerCase().includes(q)) ||
+    cab.devices.some(dev =>
+      (dev.description || '').toLowerCase().includes(q) ||
+      (dev.name || '').toLowerCase().includes(q) ||
+      (dev.individual_address || '').includes(q) ||
+      (dev.model || '').toLowerCase().includes(q) ||
+      dev.com_objects.some(co =>
+        co.name.toLowerCase().includes(q) ||
+        co.linked_gas.some(ga => ga.name.toLowerCase().includes(q) || ga.address.includes(q))
+      )
+    )
+  );
+  _renderCabinets(filtered);
+  // Auto-expand matching cabinets
+  setTimeout(() => {
+    document.querySelectorAll('#cabinets-content .cab-body').forEach(el => {
+      el.style.display = 'block';
+    });
+    document.querySelectorAll('#cabinets-content .chevron').forEach(ch => ch.classList.add('open'));
+  }, 50);
+}
+
+// ─── Buildings ──────────────────────────────
+let buildingsData = [];
+
+const SPACE_ICONS = {
+  'building': '🏠', 'building-part': '🏢', 'floor': '📐',
+  'room': '🚪', 'corridor': '🚶', 'board': '⚡',
+  'staircase': '🪜', 'area': '📍', 'folder': '📁',
+};
+
+function countSpaces(buildings) {
+  let n = 0;
+  function walk(sp) { n++; sp.children.forEach(walk); }
+  buildings.forEach(walk);
+  return n || '';
+}
+
+function renderBuildings(buildings) {
+  buildingsData = buildings;
+  _renderBuildings(buildings);
+}
+
+function _renderBuildings(buildings) {
+  const c = document.getElementById('buildings-content');
+  if (!buildings || buildings.length === 0) {
+    c.innerHTML = '<div class="empty"><div class="empty-icon">🏗</div><div>Sem estrutura de buildings configurada neste projecto</div></div>';
+    return;
+  }
+  c.innerHTML = buildings.map(b => renderSpace(b)).join('');
+}
+
+function renderSpace(sp) {
+  const icon = SPACE_ICONS[sp.icon] || '📁';
+  const typeClass = 'bld-type-' + sp.icon;
+  const hasChildren = sp.children.length > 0;
+  const hasDevices = sp.devices.length > 0;
+  const hasContent = hasChildren || hasDevices;
+
+  const totalDevs = countAllDevices(sp);
+  const devLabel = totalDevs > 0 ? `<span class="bld-devcount">${totalDevs} disp.</span>` : '';
+
+  const chevron = hasContent ? `<span class="chevron" style="color:var(--text3)">▶</span>` : '<span style="width:12px;display:inline-block"></span>';
+
+  return `
+    <div class="bld-node ${typeClass}">
+      <div class="bld-header" onclick="${hasContent ? 'toggleCollapse(this)' : ''}">
+        ${chevron}
+        <span class="bld-icon">${icon}</span>
+        <span class="bld-name">${escHtml(sp.name)}</span>
+        ${devLabel}
+      </div>
+      ${hasContent ? `
+      <div class="bld-content" style="display:none">
+        ${sp.children.map(ch => renderSpace(ch)).join('')}
+        ${hasDevices ? renderBldDevices(sp.devices) : ''}
+      </div>` : ''}
+    </div>`;
+}
+
+function countAllDevices(sp) {
+  let n = sp.devices.length;
+  sp.children.forEach(ch => n += countAllDevices(ch));
+  return n;
+}
+
+function renderBldDevices(devices) {
+  return `<div class="bld-dev-list">
+    ${devices.map(dev => {
+      const label = dev.description || dev.name || '—';
+      const hasCO = dev.com_objects && dev.com_objects.length > 0;
+      return `
+      <div class="bld-dev-row">
+        <div class="bld-dev-header" onclick="toggleBldDevice(this, ${hasCO})">
+          <span class="chevron" style="color:var(--text3)">${hasCO ? '▶' : ''}</span>
+          <button class="ping-btn" title="Verificar se está online" onclick="event.stopPropagation();pingDevice(this,'${dev.individual_address}')"><span class="ping-dot"></span></button>
+          <span class="bld-dev-ia">${dev.individual_address}</span>
+          <span class="bld-dev-desc">${escHtml(label)}</span>
+          <span class="bld-dev-model">${escHtml(dev.model || '')}</span>
+          ${renderFlags(dev.flags)}
+        </div>
+        ${hasCO ? `
+        <div class="bld-dev-detail">
+          <div style="font-size:11px;color:var(--text3);padding:4px 0 2px">${escHtml(dev.manufacturer || '')}</div>
+          <table class="co-table">
+            <thead><tr><th>Objecto</th><th>Endereços de Grupo</th></tr></thead>
+            <tbody>
+              ${dev.com_objects.map(co => `
+              <tr>
+                <td class="co-name">${escHtml(co.name)}</td>
+                <td>${co.linked_gas.map(ga =>
+                  `<span class="ga-chip writable"
+                    data-ga-addr="${ga.address}"
+                    data-ga-name="${escHtml(ga.name)}"
+                    data-ga-dpt="${escHtml(ga.dpt||'')}"
+                    data-co-name="${escHtml(co.name)}"
+                    data-dev-ia="${dev.individual_address||''}"
+                    onclick="openWriteDialog(this.dataset.gaAddr,this.dataset.gaName,this.dataset.coName,this.dataset.gaDpt,this.dataset.devIa)"
+                    title="Escrever em ${escHtml(ga.address)} — ${escHtml(ga.name)}">
+                    <span class="ga-addr">${ga.address}</span>
+                    <span class="ga-name">${escHtml(ga.name)}</span>
+                    ${ga.dpt ? `<span style="font-size:10px;opacity:.6">${ga.dpt.replace('DPST-','').replace('DPT-','')}</span>` : ''}
+                  </span>`).join('')}
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>` : ''}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function toggleBldDevice(el, hasCO) {
+  if (!hasCO) return;
+  const chevron = el.querySelector('.chevron');
+  const detail = el.nextElementSibling;
+  if (!detail) return;
+  const isOpen = detail.classList.contains('open');
+  detail.classList.toggle('open', !isOpen);
+  if (chevron) chevron.classList.toggle('open', !isOpen);
+}
+
+function filterBuildings(query) {
+  if (!query.trim()) { _renderBuildings(buildingsData); return; }
+  const q = query.toLowerCase();
+
+  function filterSpace(sp) {
+    const nameMatch = sp.name.toLowerCase().includes(q);
+    const filteredDevs = sp.devices.filter(dev =>
+      (dev.description || '').toLowerCase().includes(q) ||
+      (dev.name || '').toLowerCase().includes(q) ||
+      (dev.individual_address || '').includes(q) ||
+      (dev.model || '').toLowerCase().includes(q) ||
+      dev.com_objects.some(co =>
+        co.name.toLowerCase().includes(q) ||
+        co.linked_gas.some(ga => ga.name.toLowerCase().includes(q) || ga.address.includes(q))
+      )
+    );
+    const filteredKids = sp.children.map(filterSpace).filter(Boolean);
+    if (!nameMatch && filteredDevs.length === 0 && filteredKids.length === 0) return null;
+    return { ...sp, devices: filteredDevs.length || nameMatch ? (filteredDevs.length ? filteredDevs : sp.devices) : filteredDevs,
+             children: filteredKids };
+  }
+
+  const filtered = buildingsData.map(filterSpace).filter(Boolean);
+  _renderBuildings(filtered);
+  // Auto-expand all when searching
+  setTimeout(() => {
+    document.querySelectorAll('#buildings-content .bld-content').forEach(el => {
+      el.style.display = 'block';
+    });
+    document.querySelectorAll('#buildings-content .chevron').forEach(ch => ch.classList.add('open'));
+  }, 50);
+}
+
+// ─── Group Addresses ────────────────────────
+let gaTreeData = [];
+function renderGATree(tree) {
+  gaTreeData = tree;
+  renderGAFiltered(tree);
+}
+
+function renderGAFiltered(tree) {
+  const c = document.getElementById('ga-content');
+  if (!tree || tree.length === 0) {
+    c.innerHTML = '<div class="empty"><div class="empty-icon">📬</div><div>Sem endereços de grupo</div></div>';
+    return;
+  }
+  c.innerHTML = '<div class="ga-tree">' + tree.map(r => renderGARange(r, 1)).join('') + '</div>';
+}
+
+function renderGARange(node, level) {
+  if (node.type === 'address') {
+    return `<div class="ga-item" id="ga-${node.address.replace(/\//g,'-')}">
+      <span class="ga-addr-col">${node.address}</span>
+      <span class="ga-name-col">${escHtml(node.name)}</span>
+      <span class="ga-dpt">${node.dpt || ''}</span>
+    </div>`;
+  }
+
+  const count = countGAs(node);
+  return `
+    <div class="ga-range ga-range-${level}">
+      <div class="ga-range-header" onclick="toggleCollapse(this)">
+        <span class="chevron">▶</span>
+        <span>${escHtml(node.name)}</span>
+        <span class="pill pill-gray" style="margin-left:8px">${count}</span>
+      </div>
+      <div style="display:none">
+        ${node.children.map(c => renderGARange(c, level + 1)).join('')}
+      </div>
+    </div>`;
+}
+
+function countGAs(node) {
+  if (node.type === 'address') return 1;
+  return node.children.reduce((a, c) => a + countGAs(c), 0);
+}
+
+function filterGA(query) {
+  if (!query.trim()) {
+    renderGAFiltered(gaTreeData);
+    return;
+  }
+  const q = query.toLowerCase();
+
+  function filterNode(node) {
+    if (node.type === 'address') {
+      return (node.name || '').toLowerCase().includes(q) ||
+             (node.address || '').includes(q) ||
+             (node.dpt || '').toLowerCase().includes(q) ? node : null;
+    }
+    const filteredChildren = node.children.map(filterNode).filter(Boolean);
+    if (filteredChildren.length === 0) return null;
+    return { ...node, children: filteredChildren };
+  }
+
+  const filtered = gaTreeData.map(filterNode).filter(Boolean);
+  renderGAFiltered(filtered);
+  setTimeout(() => {
+    document.querySelectorAll('.ga-range > div:last-child').forEach(el => el.style.display = 'block');
+    document.querySelectorAll('.chevron').forEach(ch => ch.classList.add('open'));
+  }, 50);
+}
+
+function goToGA(addr) {
+  const gaTab = document.querySelector('[data-panel="ga"]');
+  if (gaTab) switchTab(gaTab);
+  setTimeout(() => {
+    const id = 'ga-' + addr.replace(/\//g, '-');
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.style.background = 'rgba(79,142,247,.2)';
+      setTimeout(() => el.style.background = '', 2000);
+      // Expand parents
+      let p = el.parentElement;
+      while (p) {
+        if (p.previousElementSibling && p.previousElementSibling.classList.contains('ga-range-header')) {
+          p.style.display = 'block';
+          p.previousElementSibling.querySelector('.chevron').classList.add('open');
+        }
+        p = p.parentElement;
+      }
+    }
+  }, 100);
+}
+
+// ─── IP Connections ─────────────────────────
+function renderIPConnections(connections) {
+  const c = document.getElementById('ip-content');
+  if (!connections || connections.length === 0) {
+    c.innerHTML = '<div class="empty"><div class="empty-icon">🌐</div><div>Nenhuma ligação IP configurada</div></div>';
+    return;
+  }
+
+  c.innerHTML = connections.map(ip => `
+    <div class="ip-card">
+      <div class="ip-addr">${ip.host}</div>
+      <div style="color:var(--text3);font-size:12px;margin-top:2px">Porta ${ip.port} · ${ip.protocol || 'UDP'}</div>
+      <div class="ip-meta">
+        <span class="pill pill-blue">${ip.type}</span>
+        ${ip.name ? `<span class="pill pill-gray">${ip.name}</span>` : ''}
+      </div>
+      ${ip.raw ? `<div style="font-size:11px;color:var(--text3);margin-top:8px;font-family:monospace">${escHtml(ip.raw)}</div>` : ''}
+      <button class="ip-use-btn" onclick="useIPForMonitor('${ip.host}', ${ip.port})">
+        Usar no Group Monitor
+      </button>
+    </div>`).join('');
+}
+
+function useIPForMonitor(host, port) {
+  document.getElementById('mon-host').value = host;
+  document.getElementById('mon-port').value = port;
+  const monTab = document.querySelector('[data-panel="monitor"]');
+  if (monTab) switchTab(monTab);
+  showToast(`Gateway definido: ${host}:${port}`, 'success');
+}
+
+// ─── Group Monitor ───────────────────────────
+function monitorConnect() {
+  const host = document.getElementById('mon-host').value.trim();
+  const port = parseInt(document.getElementById('mon-port').value) || 3671;
+
+  if (!host) {
+    showToast('Introduza o endereço IP do gateway KNX', 'error');
+    return;
+  }
+
+  setMonitorStatus('connecting', `A ligar a ${host}:${port}...`);
+  document.getElementById('btn-connect').disabled = true;
+  document.getElementById('mon-empty').style.display = 'flex';
+
+  socket.emit('monitor_start', { host, port });
+  setTimeout(() => {
+    document.getElementById('btn-connect').disabled = false;
+  }, 3000);
+}
+
+function monitorDisconnect() {
+  socket.emit('monitor_stop', {});
+}
+
+function setMonitorStatus(state, text) {
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  dot.className = 'status-dot ' + (state === 'connected' ? 'connected' : state === 'connecting' ? 'connecting' : '');
+  txt.textContent = text;
+}
+
+function addTelegram(tg) {
+  allTelegrams.push(tg);
+  if (allTelegrams.length > MAX_TELEGRAMS) {
+    allTelegrams.splice(0, allTelegrams.length - MAX_TELEGRAMS);
+  }
+
+  // Check filter
+  if (matchesFilter(tg)) {
+    appendTelegramRow(tg);
+    updateFilterCount();
+  }
+}
+
+function matchesFilter(tg) {
+  const writes = document.getElementById('chk-writes').checked;
+  const reads = document.getElementById('chk-reads').checked;
+  const responses = document.getElementById('chk-responses').checked;
+  const text = document.getElementById('mon-filter').value.toLowerCase();
+
+  if (tg.service === 'Write' && !writes) return false;
+  if (tg.service === 'Read' && !reads) return false;
+  if (tg.service === 'Response' && !responses) return false;
+
+  if (text) {
+    const combined = `${tg.destination} ${tg.ga_name} ${tg.decoded_value} ${tg.source}`.toLowerCase();
+    if (!combined.includes(text)) return false;
+  }
+  return true;
+}
+
+function appendTelegramRow(tg) {
+  const tbody = document.getElementById('telegram-body');
+  document.getElementById('mon-empty').style.display = 'none';
+
+  const svcClass = tg.service === 'Write' ? 'tg-svc-W' :
+                   tg.service === 'Read' ? 'tg-svc-R' :
+                   tg.service === 'Response' ? 'tg-svc-Resp' : 'tg-svc-O';
+
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td style="color:var(--text3)">${tg.count}</td>
+    <td class="tg-time">${tg.timestamp}</td>
+    <td class="tg-src">${escHtml(tg.source || '')}</td>
+    <td class="tg-dst">${escHtml(tg.destination)}</td>
+    <td class="${svcClass}">${escHtml(tg.service)}</td>
+    <td class="tg-ganame" title="${escHtml(tg.ga_name)}">${escHtml(tg.ga_name || '—')}</td>
+    <td class="tg-val">${escHtml(tg.decoded_value || tg.raw_value || '')}</td>
+    <td class="tg-dpt">${(tg.dpt || '').replace('DPST-', '').replace('DPT-', '')}</td>
+  `;
+  tbody.appendChild(tr);
+
+  // Limit DOM rows
+  while (tbody.rows.length > 2000) {
+    tbody.deleteRow(0);
+  }
+
+  // Auto-scroll
+  if (document.getElementById('chk-scroll').checked) {
+    const container = document.getElementById('scroll-container');
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
+function applyMonitorFilter() {
+  const tbody = document.getElementById('telegram-body');
+  tbody.innerHTML = '';
+
+  const filtered = allTelegrams.filter(matchesFilter);
+  filtered.forEach(tg => appendTelegramRow(tg));
+  updateFilterCount();
+}
+
+function updateFilterCount() {
+  const tbody = document.getElementById('telegram-body');
+  document.getElementById('filter-count').textContent =
+    `${tbody.rows.length} telegramas (total: ${allTelegrams.length})`;
+}
+
+function clearTelegrams() {
+  allTelegrams = [];
+  document.getElementById('telegram-body').innerHTML = '';
+  if (!monitorConnected) document.getElementById('mon-empty').style.display = 'flex';
+  updateFilterCount();
+}
+
+// ─── UI helpers ─────────────────────────────
+function toggleCollapse(header) {
+  const chevron = header.querySelector('.chevron');
+  const content = header.nextElementSibling;
+  if (!content) return;
+  const isOpen = content.style.display !== 'none';
+  content.style.display = isOpen ? 'none' : 'block';
+  if (chevron) chevron.classList.toggle('open', !isOpen);
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function showToast(msg, type = 'info') {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className = 'show ' + (type === 'error' ? 'error' : type === 'success' ? 'success' : '');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => toast.className = '', 3500);
+}
+
+
+// ─── Write dialog ────────────────────────────
+// _writeAddr / _writeDpt set at top of script
+
+// Resolve IP to use (called at send time)
+function _resolveWriteConn() {
+  // Monitor active → delegate to server (no host needed)
+  if (monitorConnected) return { host: '', port: 3671 };
+
+  // Custom IP checkbox active
+  const useOther = document.getElementById('wd-use-other-ip');
+  if (useOther && useOther.checked) {
+    const host = (document.getElementById('wd-other-ip') || {}).value || '';
+    const port = parseInt((document.getElementById('wd-other-port') || {}).value) || 3671;
+    return { host, port };
+  }
+
+  // Project IP(s)
+  const ipEl   = document.getElementById('wd-ip');
+  const portEl = document.getElementById('wd-port');
+  return {
+    host: ipEl   ? ipEl.value.trim() : '',
+    port: portEl ? (parseInt(portEl.value) || 3671) : 3671,
+  };
+}
+
+function highlightToggle(btn) {
+  btn.closest('.wd-box, #write-dialog').querySelectorAll('.wd-toggle').forEach(function(b){
+    b.classList.remove('selected');
+  });
+  btn.classList.add('selected');
+}
+
+function _setWdStatus(msg, type) {
+  const el = document.getElementById('wd-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = type === 'error' ? 'var(--error)' :
+                   type === 'ok'    ? 'var(--success)' : 'var(--text3)';
+}
+
+// Core send — called by all input types
+function _doSend(value) {
+  const address = _writeAddr;
+  const dpt     = _writeDpt;
+  if (!address) { _setWdStatus('Endereço inválido', 'error'); return; }
+  if (value === '' || value === null || value === undefined) {
+    _setWdStatus('Introduza um valor', 'error'); return;
+  }
+
+  const conn = _resolveWriteConn();
+  if (!monitorConnected && !conn.host) {
+    _setWdStatus('Configure o IP da IP Interface', 'error'); return;
+  }
+
+  // Disable all interactive elements while sending
+  document.querySelectorAll('#wd-input-area button, #wd-input-area input,#wd-confirm-btn').forEach(el => {
+    el.disabled = true;
+  });
+  _setWdStatus('A enviar…', 'info');
+
+  const body = { address, value: String(value), dpt };
+  if (conn.host) { body.host = conn.host; body.port = conn.port; }
+
+  fetch('api/write_ga', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  .then(r => r.json())
+  .then(d => {
+    document.querySelectorAll('#wd-input-area button, #wd-input-area input,#wd-confirm-btn').forEach(el => {
+      el.disabled = false;
+    });
+    if (d.error) {
+      _setWdStatus('✗ ' + d.error, 'error');
+    } else {
+      _setWdStatus('✓ ' + value + ' → ' + address, 'ok');
+      setTimeout(() => _setWdStatus('', ''), 2500);
+    }
+  })
+  .catch(e => {
+    document.querySelectorAll('#wd-input-area button, #wd-input-area input,#wd-confirm-btn').forEach(el => {
+      el.disabled = false;
+    });
+    _setWdStatus('✗ ' + e.message, 'error');
+  });
+}
+
+function openWriteDialog(addr, gaName, coName, dpt, deviceIA) {
+  _writeAddr = addr || '';
+  _writeDpt  = dpt  || '';
+
+  document.getElementById('wd-title').textContent   = addr || '—';
+  document.getElementById('wd-ganame').textContent  = gaName  || '';
+  document.getElementById('wd-coname').textContent  = coName  || '';
+  document.getElementById('wd-conn-line').textContent =
+    deviceIA ? 'Endereço individual: ' + deviceIA : '';
+  _setWdStatus('', '');
+
+  // ── IP area ────────────────────────────────────────
+  const ipArea = document.getElementById('wd-ip-area');
+  if (monitorConnected) {
+    ipArea.innerHTML =
+      '<div style="font-size:12px;color:var(--success);margin-bottom:4px">' +
+      '✓ Via Group Monitor activo</div>';
+  } else {
+    // Pre-fill with project IP or monitor inputs
+    let h = (document.getElementById('mon-host') || {}).value || '';
+    let p = (document.getElementById('mon-port') || {}).value || '3671';
+    if (!h && writeProjectIPs.length > 0) { h = writeProjectIPs[0].host; p = String(writeProjectIPs[0].port); }
+    ipArea.innerHTML =
+      '<div class="wd-ip-row">' +
+      '<span style="font-size:12px;color:var(--text3)">Gateway&nbsp;IP</span>' +
+      '<input class="wd-ip-input" id="wd-ip" type="text" inputmode="decimal"' +
+      ' placeholder="10.0.0.1" value="' + escHtml(h) + '"' +
+      ' oninput="this.value=this.value.replace(/,/g,\'.\');">' +
+      '<span style="font-size:12px;color:var(--text3)">:</span>' +
+      '<input class="wd-ip-input" id="wd-port" type="text" inputmode="numeric"' +
+      ' value="' + escHtml(p) + '" style="width:64px">' +
+      '</div>';
+  }
+
+  // ── Input area based on DPT ────────────────────────
+  const inputArea = document.getElementById('wd-input-area');
+  const d = dpt || '';
+
+  // Helper: is this DPT family N? (avoids DPT-1 matching DPT-10, DPT-11…)
+  function isDptFamily(n) {
+    return d === 'DPT-' + n ||
+           d.startsWith('DPT-' + n + '.') ||
+           d.includes('DPST-' + n + '-') ||
+           d === String(n) ||
+           d.startsWith(String(n) + '.');
+  }
+
+  if (isDptFamily(1)) {
+    // ── 1-bit boolean ────────────────────────────
+    const isUD = d.includes('-8') || d.includes('.008');
+    const isOC = d.includes('-9') || d.includes('.009');
+    const lbl0 = isUD ? 'UP'    : isOC ? 'OPEN'  : 'OFF';
+    const lbl1 = isUD ? 'DOWN'  : isOC ? 'CLOSE' : 'ON';
+    inputArea.innerHTML =
+      '<div class="wd-toggle-row">' +
+      '<button class="wd-toggle" onclick="this.classList.add(\'selected\');_doSend(0)">' + lbl0 + '</button>' +
+      '<button class="wd-toggle" onclick="this.classList.add(\'selected\');_doSend(1)">' + lbl1 + '</button>' +
+      '</div>' +
+      '<div class="wd-enter-hint">Toque para enviar imediatamente</div>';
+
+  } else if (isDptFamily(5)) {
+    // ── 1-byte unsigned — slider + number ───────
+    const isPct = d.includes('DPST-5-1') || d.includes('.001');
+    const maxV  = isPct ? 100 : 255;
+    const unit  = isPct ? '%' : '';
+    const step  = isPct ? 1  : 1;
+    inputArea.innerHTML =
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">' +
+      '<input type="range" id="wd-slider" min="0" max="' + maxV + '" step="' + step + '" value="0"' +
+      ' style="flex:1;accent-color:var(--accent);height:6px;cursor:pointer"' +
+      ' oninput="document.getElementById(\'wd-value\').value=this.value">' +
+      '<input class="wd-num-input" id="wd-value" type="text" inputmode="numeric"' +
+      ' value="0" style="width:80px;text-align:center;font-size:20px"' +
+      ' oninput="var v=Math.min(' + maxV + ',Math.max(0,parseInt(this.value)||0));' +
+      'document.getElementById(\'wd-slider\').value=v;"' +
+      ' onkeydown="if(event.key===\'Enter\'){event.preventDefault();' +
+      'var v=this.value.trim();if(v!==\'\')_doSend(v);}">' +
+      '<span style="font-size:13px;color:var(--text3);min-width:20px">' + unit + '</span>' +
+      '</div>' +
+      '<div class="wd-hint">0 – ' + maxV + (unit ? ' ' + unit : '') + '</div>' +
+      '<button class="wd-confirm-btn" id="wd-confirm-btn"' +
+      ' onclick="var v=document.getElementById(\'wd-value\').value.trim();if(v!==\'\')_doSend(v);">Enviar</button>';
+
+  } else if (isDptFamily(3)) {
+    // ── 4-bit dimming control ────────────────────
+    inputArea.innerHTML =
+      '<div style="margin-bottom:8px;font-size:12px;color:var(--text3)">Velocidade (0=parar)</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' +
+      [0,1,2,3,4,5,6,7].map(function(v){
+        return '<button class="wd-toggle" style="flex:1;min-width:40px;padding:10px 4px;font-size:13px"' +
+               ' onclick="highlightToggle(this);_doSend(8+' + v + ')">' +
+               (v===0?'Stop':v) + '</button>';
+      }).join('') +
+      '</div>' +
+      '<div style="display:flex;gap:6px">' +
+      '<button class="wd-toggle" style="flex:1" onclick="highlightToggle(this);_doSend(0)">Stop</button>' +
+      '</div>' +
+      '<div class="wd-enter-hint">Dimming Up/Down por velocidade</div>';
+
+  } else if (isDptFamily(9)) {
+    // ── 2-byte float ─────────────────────────────
+    const unit9 = d.includes('-1') || d.includes('.001') ? '°C' :
+                  d.includes('-4') || d.includes('.004') ? 'lux' :
+                  d.includes('-5') || d.includes('.005') ? 'm/s' : '';
+    inputArea.innerHTML =
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">' +
+      '<input class="wd-num-input" id="wd-value" type="text" inputmode="decimal"' +
+      ' placeholder="ex: 21.5" autocomplete="off" style="flex:1"' +
+      ' oninput="this.value=this.value.replace(/,/g,\'.\');"' +
+      ' onkeydown="if(event.key===\'Enter\'){event.preventDefault();' +
+      'var v=this.value.trim();if(v)_doSend(v);}">' +
+      (unit9 ? '<span style="font-size:15px;color:var(--text2);font-weight:600">' + unit9 + '</span>' : '') +
+      '</div>' +
+      '<button class="wd-confirm-btn" id="wd-confirm-btn"' +
+      ' onclick="var v=document.getElementById(\'wd-value\').value.trim();if(v)_doSend(v);">Enviar</button>';
+    setTimeout(function(){ var el = document.getElementById('wd-value'); if(el) el.focus(); }, 150);
+
+  } else {
+    // ── Generic numeric ───────────────────────────
+    const isFloat = isDptFamily(14) || isDptFamily(15);
+    const hint = 'Valor' + (isFloat ? ' decimal' : ' numérico');
+    inputArea.innerHTML =
+      '<input class="wd-num-input" id="wd-value" type="text" inputmode="decimal"' +
+      ' placeholder="' + hint + '" autocomplete="off"' +
+      ' oninput="this.value=this.value.replace(/,/g,\'.\');"' +
+      ' onkeydown="if(event.key===\'Enter\'){event.preventDefault();' +
+      'var v=this.value.trim();if(v)_doSend(v);}">' +
+      (dpt ? '<div class="wd-hint">' + escHtml(dpt) + '</div>' : '') +
+      '<button class="wd-confirm-btn" id="wd-confirm-btn"' +
+      ' onclick="var v=document.getElementById(\'wd-value\').value.trim();if(v)_doSend(v);">Enviar</button>';
+    setTimeout(function(){ var el = document.getElementById('wd-value'); if(el) el.focus(); }, 150);
+  }
+
+  document.getElementById('write-dialog').style.display = 'flex';
+}
+
+function closeWriteDialog() {
+  document.getElementById('write-dialog').style.display = 'none';
+  _setWdStatus('', '');
+}
+
+// ─── Bootstrap ───────────────────────────────
+initSocket();
+
+// Auto-fill gateway IP/port from HA add-on options (if defined)
+// HA add-on config: pre-fill and hide gateway fields if configured
+fetch('api/config')
+  .then(r => r.json())
+  .then(cfg => {
+    window._gwHost = cfg.knx_default_host || '';
+    window._gwPort = cfg.knx_default_port || 3671;
+
+    if (window._gwHost) {
+      // Pre-fill all IP fields
+      ['mon-host','diag-host'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = window._gwHost;
+      });
+      ['mon-port','diag-port'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = window._gwPort;
+      });
+
+      // Hide the IP input rows — gateway comes from add-on config
+      const monRow = document.getElementById('mon-gw-row');
+      if (monRow) monRow.style.display = 'none';
+      const diagRow = document.getElementById('diag-gw-row');
+      if (diagRow) diagRow.style.display = 'none';
+
+      // Show a small gateway badge in the monitor toolbar
+      const toolbar = document.getElementById('monitor-toolbar');
+      if (toolbar) {
+        const badge = document.createElement('span');
+        badge.style.cssText = 'font-size:11px;color:var(--text3);background:var(--surface2);padding:3px 8px;border-radius:4px;margin-right:4px';
+        badge.textContent = 'Gateway: ' + window._gwHost + ':' + window._gwPort;
+        toolbar.insertBefore(badge, toolbar.firstChild);
+      }
+    }
+  })
+  .catch(() => {});
+
+// ── Auto-restore last project on page load ────────────────────────────────
+fetch('api/project')
+  .then(r => r.ok ? r.json() : null)
+  .then(data => {
+    if (data && data.project) {
+        loadProjectData(data);
+    }
+  })
+  .catch(() => {});
+</script>
+</body>
+</html>

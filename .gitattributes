@@ -1,0 +1,9 @@
+# Força LF em todos os ficheiros de texto (necessário para Docker/Alpine)
+* text=auto eol=lf
+
+# Binários — sem conversão
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.jfif binary
