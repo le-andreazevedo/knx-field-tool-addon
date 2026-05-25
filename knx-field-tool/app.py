@@ -307,21 +307,21 @@ def _run_monitor_thread(host, port, local_ip=None):
 
 async def _async_monitor(host, port, local_ip=None):
     """Async KNX monitoring using xknx."""
-    # Check xknx availability and collect all imports upfront
+    # Check xknx availability — import only what is actually used.
+    # NOTE: TelegramDirection was removed in xknx 3.x; do NOT import it.
     xknx_error = None
     XKNX = ConnectionConfig = ConnectionType = None
     try:
         from xknx import XKNX
         from xknx.io import ConnectionConfig, ConnectionType
-        from xknx.telegram import Telegram, TelegramDirection
         from xknx.telegram.apci import GroupValueWrite, GroupValueRead, GroupValueResponse
     except ImportError as e:
         xknx_error = str(e)
 
     if xknx_error:
         _emit_safe('monitor_error', {
-            'message': f'xknx import failed: {xknx_error}\n'
-                       f'Run: pip install xknx'
+            'message': f'xknx não disponível: {xknx_error}\n'
+                       f'Instala com: pip install xknx'
         })
         await _raw_udp_monitor(host, port)
         return
@@ -342,10 +342,30 @@ async def _async_monitor(host, port, local_ip=None):
 
         xknx_inst.telegram_queue.register_telegram_received_cb(telegram_received)
 
+        # Ligar com timeout — se o gateway não responder ao CONNECT_REQUEST
+        # o start() bloqueia indefinidamente sem este wait_for.
+        try:
+            await asyncio.wait_for(xknx_inst.start(), timeout=12)
+        except asyncio.TimeoutError:
+            _emit_safe('monitor_error', {
+                'message': (
+                    f'Timeout ao ligar a {host}:{port} (12 s).\n'
+                    f'Verifique:\n'
+                    f'  • IP e porta corretos\n'
+                    f'  • Nenhum outro cliente KNX ligado ao gateway\n'
+                    f'  • Gateway acessível a partir deste dispositivo'
+                )
+            })
+            monitor_state['running'] = False
+            try:
+                await xknx_inst.stop()
+            except Exception:
+                pass
+            return
+
+        # Só emite "ligado" depois de start() ter sucesso
         _emit_safe('monitor_connected', {'host': host, 'port': port})
         monitor_state['running'] = True
-
-        await xknx_inst.start()
 
         # Keep running until stop is requested
         while monitor_state['running']:

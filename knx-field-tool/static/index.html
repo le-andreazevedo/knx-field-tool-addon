@@ -721,6 +721,7 @@ function initSocket() {
   });
 
   socket.on('monitor_connected', (data) => {
+    _clearMonConnectTimer();
     setMonitorStatus('connected', `Ligado: ${data.host}:${data.port}${data.warning ? ' ⚠' : ''}`);
     if (data.warning) showToast('⚠ ' + data.warning, 'warn');
     document.getElementById('btn-connect').style.display = 'none';
@@ -739,6 +740,7 @@ function initSocket() {
   });
 
   socket.on('monitor_error', (data) => {
+    _clearMonConnectTimer();
     showToast('Erro: ' + data.message, 'error');
     setMonitorStatus('disconnected', 'Erro de ligação');
     document.getElementById('btn-connect').style.display = 'flex';
@@ -1596,6 +1598,8 @@ function useIPForMonitor(host, port) {
 }
 
 // ─── Group Monitor ───────────────────────────
+let _monConnectTimer = null;
+
 function monitorConnect() {
   const host = document.getElementById('mon-host').value.trim();
   const port = parseInt(document.getElementById('mon-port').value) || 3671;
@@ -1605,14 +1609,33 @@ function monitorConnect() {
     return;
   }
 
-  setMonitorStatus('connecting', `A ligar a ${host}:${port}...`);
+  setMonitorStatus('connecting', `A ligar a ${host}:${port}…`);
   document.getElementById('btn-connect').disabled = true;
   document.getElementById('mon-empty').style.display = 'flex';
 
   socket.emit('monitor_start', { host, port });
+
+  // Reabilita botão após 3 s para permitir nova tentativa
   setTimeout(() => {
     document.getElementById('btn-connect').disabled = false;
   }, 3000);
+
+  // Após 14 s sem resposta, mostra dica (o backend dá timeout aos 12 s)
+  clearTimeout(_monConnectTimer);
+  _monConnectTimer = setTimeout(() => {
+    if (!monitorConnected) {
+      setMonitorStatus('connecting', `Sem resposta de ${host}:${port}`);
+      showToast(
+        `Sem resposta do gateway em ${host}:${port}.\nVerifica se o IP está correto e se não há outro cliente ligado.`,
+        'error'
+      );
+    }
+  }, 14000);
+}
+
+function _clearMonConnectTimer() {
+  clearTimeout(_monConnectTimer);
+  _monConnectTimer = null;
 }
 
 function monitorDisconnect() {
