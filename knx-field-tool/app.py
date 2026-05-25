@@ -380,124 +380,180 @@ def _run_monitor_thread(host, port, local_ip=None):
 
 
 async def _async_monitor(host, port, local_ip=None):
-    """Async KNX monitoring using xknx."""
-    # Check xknx availability — import only what is actually used.
-    # NOTE: TelegramDirection was removed in xknx 3.x; do NOT import it.
-    xknx_error = None
-    XKNX = ConnectionConfig = ConnectionType = None
-    try:
-        from xknx import XKNX
-        from xknx.io import ConnectionConfig, ConnectionType
-        from xknx.telegram.apci import GroupValueWrite, GroupValueRead, GroupValueResponse
-    except ImportError as e:
-        xknx_error = str(e)
+    """
+    KNX/IP Group Monitor — raw UDP tunneling implementation.
 
-    if xknx_error:
-        _emit_safe('monitor_error', {
-            'message': f'xknx não disponível: {xknx_error}\n'
-                       f'Instala com: pip install xknx'
-        })
-        await _raw_udp_monitor(host, port)
+    Diagnosis showed that, even with the correct local_ip in the HPAI,
+    the xknx telegram_queue callback (register_telegram_received_cb) is
+    never invoked for incoming group telegrams in xknx 3.x. Root cause:
+    an internal xknx architectural change means the callback is only
+    triggered when xknx Device objects process the telegram, not for
+    raw/unfiltered frames.
+
+    Solution: bypass xknx entirely for receiving and implement the
+    KNX/IP Tunneling protocol directly with a raw UDP socket. This gives
+    us full control and works regardless of xknx version.
+    xknx is still used for outgoing WRITE telegrams (via write_ga endpoint
+    which creates its own temporary connection).
+    """
+    import socket as _socket
+    import struct
+
+    GW = (host, port)
+
+    # ── Detect local IP ───────────────────────────────────────────────────────
+    _lip = local_ip or ''
+    if not _lip:
+        try:
+            _s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+            _s.connect((host, int(port)))
+            _lip = _s.getsockname()[0]
+            _s.close()
+        except Exception:
+            _lip = '0.0.0.0'
+    monitor_state['local_ip'] = _lip
+    print(f'[monitor] local_ip={_lip!r}  gateway={host}:{port}', flush=True)
+
+    # ── UDP socket ────────────────────────────────────────────────────────────
+    sock = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+    sock.setsockopt(_socket.SOL_SOCKET, _socket.SO_REUSEADDR, 1)
+    sock.bind(('0.0.0.0', 0))
+    sock.setblocking(False)
+    _, MY_PORT = sock.getsockname()
+
+    try:
+        MY_IP_B = _socket.inet_aton(_lip)
+    except Exception:
+        MY_IP_B = bytes(4)
+
+    # ── KNX/IP protocol helpers ───────────────────────────────────────────────
+    def _hdr(service, body: bytes) -> bytes:
+        """KNXnet/IP header (6 bytes) + body."""
+        return struct.pack('!BBHH', 6, 0x10, service, 6 + len(body)) + body
+
+    def _hpai(ip_b: bytes, p: int) -> bytes:
+        """Host Protocol Address Information (8 bytes, IPv4/UDP)."""
+        return struct.pack('!BB4sH', 8, 0x01, ip_b, p)
+
+    HPAI_SELF = _hpai(MY_IP_B, MY_PORT)
+
+    # CRI — Tunneling, Link Layer (4 bytes)
+    CRI = bytes([0x04, 0x04, 0x02, 0x00])
+
+    # ── CONNECT_REQUEST (0x0205) ──────────────────────────────────────────────
+    sock.sendto(_hdr(0x0205, HPAI_SELF + HPAI_SELF + CRI), GW)
+    print(f'[monitor] CONNECT_REQUEST → {GW}  local_port={MY_PORT}', flush=True)
+
+    # ── Wait for CONNECT_RESPONSE (0x0206) ────────────────────────────────────
+    channel_id = None
+    t0 = asyncio.get_event_loop().time()
+    while asyncio.get_event_loop().time() - t0 < 10:
+        try:
+            data, _ = sock.recvfrom(1024)
+            if len(data) >= 8 and struct.unpack('!H', data[2:4])[0] == 0x0206:
+                status = data[7]
+                if status == 0x00:
+                    channel_id = data[6]
+                    print(f'[monitor] CONNECT_RESPONSE OK  channel={channel_id}', flush=True)
+                else:
+                    msg = {
+                        0x21: 'No more free tunnelling connections (gateway is full)',
+                        0x23: 'Connection type not supported',
+                        0x24: 'Connection option not supported',
+                        0x25: 'No more free data connections',
+                        0x26: 'Tunnelling layer not supported',
+                    }.get(status, f'Gateway error 0x{status:02X}')
+                    print(f'[monitor] CONNECT_RESPONSE error: {msg}', flush=True)
+                    _emit_safe('monitor_error', {'message': msg})
+                    sock.close()
+                    return
+                break
+        except BlockingIOError:
+            pass
+        await asyncio.sleep(0.05)
+
+    if channel_id is None:
+        msg = (f'Timeout: no CONNECT_RESPONSE from {host}:{port} (10 s).\n'
+               f'• Check IP and port are correct\n'
+               f'• Gateway may already have a client connected')
+        print(f'[monitor] {msg}', flush=True)
+        _emit_safe('monitor_error', {'message': msg})
+        sock.close()
         return
 
-    try:
-        # Determine the local IP that xknx will use.
-        # In Docker (without host_network) this is the container's bridge IP
-        # (e.g. 172.30.x.x) which the KNX gateway cannot route to — group
-        # telegrams are never delivered.  With host_network: true this becomes
-        # the HA host's real LAN IP and everything works.
-        _detected_local_ip = local_ip or ''
-        if not _detected_local_ip:
-            try:
-                import socket as _sock
-                _s = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
-                _s.connect((host, int(port)))
-                _detected_local_ip = _s.getsockname()[0]
-                _s.close()
-            except Exception:
-                _detected_local_ip = '?'
-        monitor_state['local_ip'] = _detected_local_ip
-        print(f'[monitor] local_ip={_detected_local_ip!r}  (this IP goes into KNX/IP HPAI; '
-              f'gateway must be able to reach it)', flush=True)
+    # ── Connected ─────────────────────────────────────────────────────────────
+    _reset_telegram_buffer()
+    monitor_state['running']      = True
+    monitor_state['xknx_instance'] = None   # raw mode — no xknx instance
+    monitor_state['cb_invoked']    = 0
+    monitor_state['cb_errors']     = 0
+    monitor_state['cb_last_error'] = ''
 
-        conn_config = ConnectionConfig(
-            connection_type=ConnectionType.TUNNELING,
-            gateway_ip=host,
-            gateway_port=port,
-            local_ip=local_ip or None,
-        )
+    _emit_safe('monitor_connected', {'host': host, 'port': port,
+                                     'xknx_version': f'raw-udp/{_get_xknx_version()}'})
 
-        xknx_inst = XKNX(connection_config=conn_config)
-        monitor_state['xknx_instance'] = xknx_inst
+    last_hb   = asyncio.get_event_loop().time()
+    pkt_count = 0
 
-        # Reset diagnostic counters for this session
-        monitor_state['cb_invoked']    = 0
-        monitor_state['cb_errors']     = 0
-        monitor_state['cb_last_error'] = ''
+    # ── Main receive loop ─────────────────────────────────────────────────────
+    while monitor_state['running']:
+        now = asyncio.get_event_loop().time()
 
-        # xknx 3.x requires an async callback; a sync callback is silently ignored.
-        async def telegram_received(telegram):
-            monitor_state['cb_invoked'] += 1
-            try:
-                _process_telegram(telegram)
-            except Exception as exc:
-                monitor_state['cb_errors'] += 1
-                monitor_state['cb_last_error'] = str(exc)
-                print(f'[monitor] callback error #{monitor_state["cb_errors"]}: {exc}', flush=True)
+        # CONNECTIONSTATE_REQUEST (0x0207) every 60 s
+        if now - last_hb >= 60:
+            cs_body = bytes([channel_id, 0x00]) + HPAI_SELF
+            sock.sendto(_hdr(0x0207, cs_body), GW)
+            last_hb = now
 
-        xknx_inst.telegram_queue.register_telegram_received_cb(telegram_received)
-
-        # Ligar com timeout — se o gateway não responder ao CONNECT_REQUEST
-        # o start() bloqueia indefinidamente sem este wait_for.
         try:
-            await asyncio.wait_for(xknx_inst.start(), timeout=12)
-        except asyncio.TimeoutError:
-            _emit_safe('monitor_error', {
-                'message': (
-                    f'Timeout connecting to {host}:{port} (12 s).\n'
-                    f'Check:\n'
-                    f'  • IP and port are correct\n'
-                    f'  • No other KNX client is connected to the gateway\n'
-                    f'  • Gateway is reachable from this device'
-                )
-            })
+            data, addr = sock.recvfrom(1024)
+        except BlockingIOError:
+            await asyncio.sleep(0.005)
+            continue
+        except Exception as e:
+            print(f'[monitor] recv error: {e}', flush=True)
+            await asyncio.sleep(0.1)
+            continue
+
+        if len(data) < 6:
+            continue
+
+        svc = struct.unpack('!H', data[2:4])[0]
+
+        if svc == 0x0420 and len(data) >= 10:   # TUNNELING_REQUEST
+            ch = data[6]
+            sn = data[7]
+            if ch == channel_id:
+                # ACK immediately (TUNNELING_ACK 0x0421)
+                ack_body = bytes([4, ch, sn, 0x00])
+                sock.sendto(_hdr(0x0421, ack_body), addr)
+                # cEMI frame starts at byte 10
+                _parse_cemi(data[10:], addr[0])
+                pkt_count += 1
+                monitor_state['cb_invoked'] += 1
+
+        elif svc == 0x0208:                      # CONNECTIONSTATE_RESPONSE
+            status = data[7] if len(data) > 7 else 0
+            if status != 0x00:
+                print(f'[monitor] CONNECTIONSTATE_RESPONSE error 0x{status:02X}', flush=True)
+
+        elif svc == 0x0209:                      # DISCONNECT_REQUEST from gateway
+            print('[monitor] gateway requested disconnect', flush=True)
+            disc_resp = _hdr(0x020A, bytes([channel_id, 0x00]))
+            sock.sendto(disc_resp, GW)
             monitor_state['running'] = False
-            try:
-                await xknx_inst.stop()
-            except Exception:
-                pass
-            return
+            break
 
-        # Reset buffer and mark as running only after successful connect
-        _reset_telegram_buffer()
-        monitor_state['running'] = True
-
-        xknx_version = _get_xknx_version()
-        print(f'[monitor] Connected to {host}:{port}  xknx={xknx_version}', flush=True)
-        _emit_safe('monitor_connected', {'host': host, 'port': port,
-                                         'xknx_version': xknx_version})
-
-        # Keep running until stop is requested
-        while monitor_state['running']:
-            try:
-                req = telegram_queue.get_nowait()
-                if req.get('_type') == 'send':
-                    await _send_telegram_async(xknx_inst, req)
-            except queue.Empty:
-                pass
-            await asyncio.sleep(0.05)
-
-        print(f'[monitor] Stopped. cb_invoked={monitor_state["cb_invoked"]}  '
-              f'cb_errors={monitor_state["cb_errors"]}  '
-              f'buffer={len(_telegram_buffer)}', flush=True)
-        await xknx_inst.stop()
-
-    except Exception as e:
-        import traceback
-        tb = traceback.format_exc()
-        print(f'[monitor] Exception: {e}\n{tb}', flush=True)
-        _emit_safe('monitor_error', {'message': f'Connection failed: {str(e)}\n{tb}'})
-        monitor_state['running'] = False
+    # ── Graceful disconnect ───────────────────────────────────────────────────
+    print(f'[monitor] stopping — pkts_received={pkt_count}  '
+          f'telegrams_emitted={len(_telegram_buffer)}', flush=True)
+    try:
+        disc_body = bytes([channel_id, 0x00]) + HPAI_SELF
+        sock.sendto(_hdr(0x0209, disc_body), GW)
+        await asyncio.sleep(0.15)   # wait for DISCONNECT_RESPONSE
+    except Exception:
+        pass
+    sock.close()
 
 
 async def _send_telegram_async(xknx, req):
