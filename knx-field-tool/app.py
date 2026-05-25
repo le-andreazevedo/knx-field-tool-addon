@@ -959,9 +959,24 @@ def ping_device():
 # Diagnose all devices from ETS project
 # ──────────────────────────────────────────────
 
+# Flag de abort do diagnóstico (acesso thread-safe — escrita simples de bool em Python é atómica)
+diag_abort = False
+
+
+@app.route('/api/diagnose/stop', methods=['POST'])
+def diagnose_stop():
+    """Abort a running diagnosis."""
+    global diag_abort
+    diag_abort = True
+    return jsonify({'success': True})
+
+
 @app.route('/api/diagnose', methods=['POST'])
 def diagnose_devices():
     """Check online status of all devices from the loaded ETS project."""
+    global diag_abort
+    diag_abort = False  # reset flag at start of new diagnosis
+
     data    = request.json or {}
     host    = data.get('host', '').strip()
     port    = int(data.get('port', 3671))
@@ -990,6 +1005,8 @@ def diagnose_devices():
     async def _run_diagnosis(xknx_inst):
         results = []
         for dev in devices:
+            if diag_abort:
+                break
             r = await _do_ping_async(xknx_inst, dev['address'], timeout)
             r['name'] = dev['name']
             r['manufacturer'] = dev['manufacturer']
@@ -1006,7 +1023,7 @@ def diagnose_devices():
             )
             per_device = timeout + 4   # ping timeout + management overhead
             results = future.result(timeout=len(devices) * per_device + 10)
-            return jsonify({'results': results, 'total': len(results)})
+            return jsonify({'results': results, 'total': len(results), 'aborted': diag_abort})
         except Exception as e:
             return jsonify({'error': str(e)}), 500
 
@@ -1039,7 +1056,7 @@ def diagnose_devices():
                              timeout=len(devices) * per_device + 15)
         )
         loop.close()
-        return jsonify({'results': results, 'total': len(results)})
+        return jsonify({'results': results, 'total': len(results), 'aborted': diag_abort})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

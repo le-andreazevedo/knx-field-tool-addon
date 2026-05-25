@@ -624,12 +624,16 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
 
     <!-- Progress -->
     <div id="diag-progress" style="display:none" class="card">
-      <div class="card-body" style="display:flex;align-items:center;gap:14px">
-        <div class="spinner" style="width:28px;height:28px;border-width:2px"></div>
-        <div>
+      <div class="card-body" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div class="spinner" style="width:28px;height:28px;border-width:2px;flex-shrink:0"></div>
+        <div style="flex:1;min-width:0">
           <div id="diag-progress-text" style="font-size:14px;font-weight:600;color:var(--text2)">A verificar dispositivos…</div>
           <div id="diag-progress-sub" style="font-size:12px;color:var(--text3);margin-top:2px">Aguarde, este processo pode demorar alguns segundos por dispositivo.</div>
         </div>
+        <button class="btn btn-disconnect" id="diag-stop-btn" onclick="stopDiagnosis()" style="flex-shrink:0">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+          Parar
+        </button>
       </div>
     </div>
 
@@ -835,6 +839,14 @@ function updateDiagGwRow() {
   }
 }
 
+let diagAbortController = null;
+
+async function stopDiagnosis() {
+  const stopBtn = document.getElementById('diag-stop-btn');
+  if (stopBtn) { stopBtn.disabled = true; stopBtn.textContent = 'A parar…'; }
+  try { await fetch('api/diagnose/stop', { method: 'POST' }); } catch(_) {}
+}
+
 async function startDiagnosis() {
   if (diagRunning) return;
 
@@ -855,8 +867,12 @@ async function startDiagnosis() {
   }
 
   diagRunning = true;
-  const btn = document.getElementById('diag-start-btn');
+  diagAbortController = new AbortController();
+
+  const btn     = document.getElementById('diag-start-btn');
+  const stopBtn = document.getElementById('diag-stop-btn');
   btn.disabled = true;
+  if (stopBtn) { stopBtn.disabled = false; stopBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg> Parar'; }
   document.getElementById('diag-progress').style.display = 'block';
   document.getElementById('diag-results').style.display = 'none';
   document.getElementById('diag-progress-text').textContent = 'A verificar dispositivos…';
@@ -871,6 +887,7 @@ async function startDiagnosis() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      signal: diagAbortController.signal,
     });
     const d = await r.json();
 
@@ -879,18 +896,21 @@ async function startDiagnosis() {
     if (d.error) {
       showToast('Erro: ' + d.error, 'error');
     } else {
-      renderDiagResults(d.results || []);
+      if (d.aborted) showToast('Diagnóstico interrompido — resultados parciais', 'warning');
+      renderDiagResults(d.results || [], d.aborted);
     }
   } catch (e) {
     document.getElementById('diag-progress').style.display = 'none';
-    showToast('Erro: ' + e.message, 'error');
+    if (e.name !== 'AbortError') showToast('Erro: ' + e.message, 'error');
   } finally {
     diagRunning = false;
+    diagAbortController = null;
     btn.disabled = false;
+    if (stopBtn) { stopBtn.disabled = false; stopBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg> Parar'; }
   }
 }
 
-function renderDiagResults(results) {
+function renderDiagResults(results, aborted = false) {
   const el = document.getElementById('diag-results');
   el.style.display = 'block';
 
@@ -906,14 +926,20 @@ function renderDiagResults(results) {
   }
 
   const ts = new Date().toLocaleTimeString('pt-PT');
+  const abortedBanner = aborted
+    ? `<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#856404;display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px">⚠️</span>
+        <span>Diagnóstico interrompido — a mostrar resultados parciais (${total} dispositivos verificados)</span>
+       </div>`
+    : '';
 
   if (offline.length === 0) {
-    el.innerHTML = `
+    el.innerHTML = abortedBanner + `
       <div class="card">
         <div class="card-body" style="text-align:center;padding:28px 20px">
-          <div style="font-size:48px;margin-bottom:12px">✅</div>
+          <div style="font-size:48px;margin-bottom:12px">${aborted ? '⚠️' : '✅'}</div>
           <div style="font-size:18px;font-weight:700;color:var(--success);margin-bottom:6px">
-            Todos os dispositivos estão online
+            ${aborted ? 'Verificados até agora — todos online' : 'Todos os dispositivos estão online'}
           </div>
           <div style="font-size:13px;color:var(--text3)">${total} dispositivos verificados · ${ts}</div>
           <div style="margin-top:16px;display:flex;justify-content:center;gap:16px;font-size:13px">
@@ -925,7 +951,7 @@ function renderDiagResults(results) {
   }
 
   // Some offline
-  el.innerHTML = `
+  el.innerHTML = abortedBanner + `
     <div class="card" style="margin-bottom:10px">
       <div class="card-body">
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
