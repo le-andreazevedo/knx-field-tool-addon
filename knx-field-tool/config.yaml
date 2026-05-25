@@ -1,6 +1,6 @@
 name: "KNX Field Tool"
 description: "Ferramenta de campo KNX — explorador de projecto ETS, monitor de grupo e diagnostico de instalacao."
-version: "1.10.0"
+version: "1.11.0"
 slug: "knx-field-tool"
 url: "https://github.com/le-andreazevedo/knx-field-tool-addon"
 init: false

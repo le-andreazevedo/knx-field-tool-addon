@@ -264,6 +264,13 @@ def monitor_start():
     if not host:
         return jsonify({'error': 'No KNX IP gateway address provided'}), 400
 
+    # If a previous thread is still winding down, wait for it to finish
+    # so the DISCONNECT_REQUEST reaches the gateway before we send a new
+    # CONNECT_REQUEST on a fresh socket.
+    old_t = monitor_state.get('thread')
+    if old_t and old_t.is_alive():
+        old_t.join(timeout=2.0)
+
     if monitor_state['running']:
         return jsonify({'error': 'Monitor already running'}), 400
 
@@ -285,8 +292,18 @@ def monitor_start():
 
 @app.route('/api/monitor/stop', methods=['POST'])
 def monitor_stop():
-    """Stop the KNX Group Monitor."""
+    """Stop the KNX Group Monitor.
+
+    Waits for the monitor thread to finish so that the DISCONNECT_REQUEST
+    is fully sent to the gateway before this response reaches the frontend.
+    Without this wait, a rapid disconnect→connect cycle arrives at the
+    gateway while the old channel is still open, causing the new connection
+    to receive no TUNNELING_REQUESTs.
+    """
     _stop_monitor()
+    t = monitor_state.get('thread')
+    if t and t.is_alive():
+        t.join(timeout=2.0)   # 2 s is generous; disconnect takes < 300 ms
     return jsonify({'success': True})
 
 
@@ -544,6 +561,10 @@ async def _async_monitor(host, port, local_ip=None):
             monitor_state['running'] = False
             break
 
+        # Yield to the event loop so other asyncio tasks can run
+        # (without this the loop can starve the event loop on heavy traffic)
+        await asyncio.sleep(0)
+
     # ── Graceful disconnect ───────────────────────────────────────────────────
     print(f'[monitor] stopping — pkts_received={pkt_count}  '
           f'telegrams_emitted={len(_telegram_buffer)}', flush=True)
@@ -647,7 +668,23 @@ def _process_raw_knxip(data, source_ip):
 
 
 def _parse_cemi(cemi, source_ip=''):
-    """Parse cEMI frame and emit telegram."""
+    """Parse cEMI L_DATA frame and emit telegram.
+
+    KNX cEMI frame layout (from 03_06_03 EMI_IMI standard):
+      byte 0      : message code  (0x29=L_DATA.ind, 0x2E=L_DATA.con, 0x11=L_DATA.req)
+      byte 1      : add_info_length
+      [add_info]  : add_info_length bytes
+      ctrl1       : 1 byte
+      ctrl2       : 1 byte (bit7 = addr_type: 1=group, 0=individual)
+      src_addr    : 2 bytes (individual address)
+      dst_addr    : 2 bytes
+      data_length : 1 byte = total NPDU octets - 1
+                    (a 1-bit DPT-1 telegram has data_length = 1, NPDU = 2 bytes)
+      NPDU        : data_length + 1  bytes
+                    byte 0: TPCI (7 bits) + APCI high (1 bit)
+                    byte 1: APCI (4 bits) + value-for-small-payloads (6 bits)
+                    bytes 2+: data bytes for payloads > 6 bits
+    """
     try:
         if len(cemi) < 6:
             return
@@ -664,35 +701,42 @@ def _parse_cemi(cemi, source_ip=''):
         if len(cemi) <= offset + 7:
             return
 
-        ctrl1 = cemi[offset]
-        ctrl2 = cemi[offset + 1]
+        ctrl1    = cemi[offset]
+        ctrl2    = cemi[offset + 1]
         src_high = cemi[offset + 2]
-        src_low = cemi[offset + 3]
+        src_low  = cemi[offset + 3]
         dst_high = cemi[offset + 4]
-        dst_low = cemi[offset + 5]
-        data_len = cemi[offset + 6]
+        dst_low  = cemi[offset + 5]
+
+        # data_length = NPDU octets - 1  (standard KNX cEMI encoding)
+        # Full NPDU size = data_length + 1
+        data_length = cemi[offset + 6]
+        npdu_size   = data_length + 1
 
         # Source individual address
         src_addr = f"{(src_high >> 4)}.{src_high & 0x0F}.{src_low}"
 
         # Destination: group or individual based on ctrl2 bit 7
         addr_type = (ctrl2 >> 7) & 1
-        dst_int = (dst_high << 8) | dst_low
+        dst_int   = (dst_high << 8) | dst_low
 
         if addr_type == 1:  # Group address
             dst_addr = f"{dst_int >> 11}/{(dst_int >> 8) & 0x07}/{dst_int & 0xFF}"
         else:
             dst_addr = f"{dst_high >> 4}.{dst_high & 0x0F}.{dst_low}"
 
-        # APDU
-        if len(cemi) < offset + 7 + data_len:
+        # NPDU (TPCI + APCI + data)
+        if len(cemi) < offset + 7 + npdu_size:
             return
 
-        apdu = cemi[offset + 7: offset + 7 + data_len]
-        if len(apdu) < 2:
+        npdu = cemi[offset + 7: offset + 7 + npdu_size]
+        if len(npdu) < 2:
             return
 
-        apci = ((apdu[0] & 0x03) << 8) | apdu[1]
+        # APCI encoded across first 2 bytes of NPDU:
+        #   npdu[0] bits 1-0 = APCI high
+        #   npdu[1]           = APCI low (+ value bits for small payloads)
+        apci    = ((npdu[0] & 0x03) << 8) | npdu[1]
         service = (apci >> 6) & 0x0F
 
         services = {
@@ -702,13 +746,15 @@ def _parse_cemi(cemi, source_ip=''):
         }
         svc_name = services.get(service, f'0x{service:02X}')
 
-        # Value
+        # Value extraction
         raw_value = None
-        if len(apdu) >= 2:
-            if data_len <= 2:
-                raw_value = apdu[1] & 0x3F
-            else:
-                raw_value = list(apdu[2:])
+        if data_length == 1:
+            # Small value (up to 6 bits) is in the last 6 bits of npdu[1]
+            # Covers DPT-1 (1-bit), DPT-2 (2-bit), DPT-3 (4-bit)
+            raw_value = npdu[1] & 0x3F
+        elif data_length > 1 and len(npdu) > 2:
+            # Payload bytes follow the 2-byte APCI
+            raw_value = list(npdu[2:])
 
         telegram_info = _build_telegram_info(
             src_addr, dst_int, dst_addr, svc_name, raw_value, addr_type == 1

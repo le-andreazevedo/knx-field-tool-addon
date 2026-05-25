@@ -749,7 +749,7 @@ function _startTelegramPoll() {
       for (const tg of (d.telegrams || [])) addTelegram(tg);
       if (d.last_seq != null) _tgLastSeq = d.last_seq;
     } catch (_) {}
-  }, 500);
+  }, 200);
 }
 
 function _stopTelegramPoll() {
