@@ -729,6 +729,9 @@ let allTelegrams = [];
 let visibleTelegrams = [];
 let telegramCount = 0;
 const MAX_TELEGRAMS = 5000;
+// Deduplication: same telegram can arrive via SocketIO push AND REST poll.
+// Track seen seq numbers so addTelegram is idempotent.
+const _seenTgSeqs = new Set();
 let socket = null;
 let monitorConnected = false;
 
@@ -741,6 +744,7 @@ let _tgLastSeq = 0;
 function _startTelegramPoll() {
   _stopTelegramPoll();
   _tgLastSeq = 0;
+  _seenTgSeqs.clear();   // reset dedup on each new connection
   _tgPoll = setInterval(async () => {
     if (!monitorConnected) { _stopTelegramPoll(); return; }
     try {
@@ -1744,6 +1748,12 @@ function setMonitorStatus(state, text) {
 }
 
 function addTelegram(tg) {
+  // Prevent duplicates: same seq can arrive via both SocketIO push and REST poll
+  if (tg.seq != null) {
+    if (_seenTgSeqs.has(tg.seq)) return;
+    _seenTgSeqs.add(tg.seq);
+    if (_seenTgSeqs.size > 2000) _seenTgSeqs.clear();
+  }
   allTelegrams.push(tg);
   if (allTelegrams.length > MAX_TELEGRAMS) {
     allTelegrams.splice(0, allTelegrams.length - MAX_TELEGRAMS);
@@ -1823,6 +1833,7 @@ function updateFilterCount() {
 
 function clearTelegrams() {
   allTelegrams = [];
+  _seenTgSeqs.clear();
   document.getElementById('telegram-body').innerHTML = '';
   if (!monitorConnected) document.getElementById('mon-empty').style.display = 'flex';
   updateFilterCount();
