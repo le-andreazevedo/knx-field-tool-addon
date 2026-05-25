@@ -710,6 +710,30 @@ const MAX_TELEGRAMS = 5000;
 let socket = null;
 let monitorConnected = false;
 
+// ─── Telegram REST polling ──────────────────
+// Polls GET /api/monitor/telegrams?since=<seq> every 500 ms.
+// More reliable than SocketIO push through HA Ingress proxy.
+let _tgPoll = null;
+let _tgLastSeq = 0;
+
+function _startTelegramPoll() {
+  _stopTelegramPoll();
+  _tgLastSeq = 0;
+  _tgPoll = setInterval(async () => {
+    if (!monitorConnected) { _stopTelegramPoll(); return; }
+    try {
+      const r = await fetch(`api/monitor/telegrams?since=${_tgLastSeq}`);
+      const d = await r.json();
+      for (const tg of (d.telegrams || [])) addTelegram(tg);
+      if (d.last_seq != null) _tgLastSeq = d.last_seq;
+    } catch (_) {}
+  }, 500);
+}
+
+function _stopTelegramPoll() {
+  if (_tgPoll) { clearInterval(_tgPoll); _tgPoll = null; }
+}
+
 // ─── Socket.IO ─────────────────────────────
 function initSocket() {
   // Support HA Ingress path prefix
@@ -1619,8 +1643,10 @@ function _startMonStatusPoll(host, port) {
         document.getElementById('btn-connect').style.display = 'none';
         document.getElementById('btn-disconnect').style.display = 'flex';
         document.getElementById('btn-connect').disabled = false;
+        document.getElementById('mon-empty').style.display = 'none';
         monitorConnected = true;
         updateDiagGwRow();
+        _startTelegramPoll();
       } else if (attempts >= MAX) {
         _stopMonStatusPoll();
         setMonitorStatus('disconnected', 'Disconnected');
@@ -1677,11 +1703,10 @@ function _clearMonConnectTimer() {} // kept for compatibility with existing even
 
 async function monitorDisconnect() {
   _stopMonStatusPoll();
+  _stopTelegramPoll();
   try {
     await fetch('api/monitor/stop', { method: 'POST' });
   } catch(_) {}
-  // SocketIO monitor_stopped event will update the UI,
-  // but also update immediately in case SocketIO is delayed
   setMonitorStatus('disconnected', 'Disconnected');
   document.getElementById('btn-connect').style.display = 'flex';
   document.getElementById('btn-disconnect').style.display = 'none';

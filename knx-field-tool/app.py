@@ -71,7 +71,16 @@ monitor_state = {
     'port': 3671,
     'telegram_count': 0,
 }
-telegram_queue = queue.Queue()  # Thread-safe queue for telegrams
+telegram_queue = queue.Queue()  # Thread-safe queue for outgoing telegrams
+
+# ── Telegram buffer for REST polling ──────────────────────────────────────────
+# HA Ingress reverse-proxy can delay or drop SocketIO push events from background
+# threads. Keeping a rolling buffer allows the frontend to poll for new telegrams
+# via GET /api/monitor/telegrams?since=<seq> — reliable through any HTTP proxy.
+from collections import deque as _deque
+_telegram_buffer      = _deque(maxlen=1000)   # last 1 000 telegrams
+_telegram_buffer_lock = threading.Lock()
+_telegram_seq         = 0                     # monotonically increasing counter
 
 
 # ──────────────────────────────────────────────
@@ -165,6 +174,20 @@ def monitor_status():
         'port': monitor_state['port'],
         'telegram_count': monitor_state['telegram_count'],
     })
+
+
+@app.route('/api/monitor/telegrams', methods=['GET'])
+def get_telegrams():
+    """Return telegrams buffered since a given sequence number.
+
+    Query param: since=<int>  (default 0 → return all buffered telegrams)
+    Response:    { telegrams: [...], last_seq: <int> }
+    """
+    since = int(request.args.get('since', 0))
+    with _telegram_buffer_lock:
+        new_tgs  = [t for t in _telegram_buffer if t.get('seq', 0) > since]
+        last_seq = _telegram_seq
+    return jsonify({'telegrams': new_tgs, 'last_seq': last_seq})
 
 
 @app.route('/api/monitor/start', methods=['POST'])
@@ -337,7 +360,8 @@ async def _async_monitor(host, port, local_ip=None):
         xknx_inst = XKNX(connection_config=conn_config)
         monitor_state['xknx_instance'] = xknx_inst
 
-        def telegram_received(telegram):
+        # xknx 3.x requires an async callback; a sync callback is silently ignored.
+        async def telegram_received(telegram):
             _process_telegram(telegram)
 
         xknx_inst.telegram_queue.register_telegram_received_cb(telegram_received)
@@ -349,11 +373,11 @@ async def _async_monitor(host, port, local_ip=None):
         except asyncio.TimeoutError:
             _emit_safe('monitor_error', {
                 'message': (
-                    f'Timeout ao ligar a {host}:{port} (12 s).\n'
-                    f'Verifique:\n'
-                    f'  • IP e porta corretos\n'
-                    f'  • Nenhum outro cliente KNX ligado ao gateway\n'
-                    f'  • Gateway acessível a partir deste dispositivo'
+                    f'Timeout connecting to {host}:{port} (12 s).\n'
+                    f'Check:\n'
+                    f'  • IP and port are correct\n'
+                    f'  • No other KNX client is connected to the gateway\n'
+                    f'  • Gateway is reachable from this device'
                 )
             })
             monitor_state['running'] = False
@@ -363,7 +387,8 @@ async def _async_monitor(host, port, local_ip=None):
                 pass
             return
 
-        # Só emite "ligado" depois de start() ter sucesso
+        # Reset buffer and mark as running only after successful connect
+        _reset_telegram_buffer()
         _emit_safe('monitor_connected', {'host': host, 'port': port})
         monitor_state['running'] = True
 
@@ -709,8 +734,21 @@ def _decode_value(raw_value, dpt):
 
 
 def _emit_telegram(telegram_info):
-    """Emit telegram to all connected SocketIO clients."""
+    """Store telegram in buffer (for REST polling) and push via SocketIO."""
+    global _telegram_seq
+    with _telegram_buffer_lock:
+        _telegram_seq += 1
+        telegram_info['seq'] = _telegram_seq
+        _telegram_buffer.append(telegram_info)
+    # SocketIO push — works when not behind a buffering proxy
     socketio.emit('telegram', telegram_info)
+
+
+def _reset_telegram_buffer():
+    global _telegram_seq
+    with _telegram_buffer_lock:
+        _telegram_buffer.clear()
+        _telegram_seq = 0
 
 
 def _emit_safe(event, data):
