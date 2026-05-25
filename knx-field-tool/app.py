@@ -22,6 +22,28 @@ from flask_cors import CORS
 
 from knx_parser import parse_knxproj
 
+
+# ──────────────────────────────────────────────
+# Helpers
+# ──────────────────────────────────────────────
+def _get_xknx_version() -> str:
+    """Return the installed xknx version as a plain string."""
+    # importlib.metadata is the correct way — getattr(module, '__version__') can
+    # return a sub-module object in some xknx packaging layouts.
+    try:
+        import importlib.metadata
+        return importlib.metadata.version('xknx')
+    except Exception:
+        pass
+    try:
+        import xknx as _x
+        v = getattr(_x, '__version__', None)
+        if v is not None and isinstance(v, str):
+            return v
+    except Exception:
+        pass
+    return 'unknown'
+
 # ──────────────────────────────────────────────
 # App setup
 # ──────────────────────────────────────────────
@@ -168,12 +190,6 @@ def get_ga_lookup():
 @app.route('/api/monitor/status', methods=['GET'])
 def monitor_status():
     """Get Group Monitor connection status."""
-    xknx_version = 'unknown'
-    try:
-        import xknx as _x
-        xknx_version = getattr(_x, '__version__', 'unknown')
-    except Exception:
-        pass
     return jsonify({
         'running': monitor_state['running'],
         'host': monitor_state['host'],
@@ -181,19 +197,13 @@ def monitor_status():
         'telegram_count': monitor_state['telegram_count'],
         'buffer_size': len(_telegram_buffer),
         'last_seq': _telegram_seq,
-        'xknx_version': xknx_version,
+        'xknx_version': _get_xknx_version(),
     })
 
 
 @app.route('/api/monitor/debug', methods=['GET'])
 def monitor_debug():
     """Return diagnostic information for troubleshooting."""
-    xknx_version = 'unknown'
-    try:
-        import xknx as _x
-        xknx_version = getattr(_x, '__version__', 'unknown')
-    except Exception:
-        pass
     with _telegram_buffer_lock:
         last_5 = list(_telegram_buffer)[-5:]
     return jsonify({
@@ -203,7 +213,7 @@ def monitor_debug():
         'telegram_count': monitor_state['telegram_count'],
         'buffer_size': len(_telegram_buffer),
         'last_seq': _telegram_seq,
-        'xknx_version': xknx_version,
+        'xknx_version': _get_xknx_version(),
         'last_5_telegrams': last_5,
     })
 
@@ -432,13 +442,7 @@ async def _async_monitor(host, port, local_ip=None):
         _reset_telegram_buffer()
         monitor_state['running'] = True
 
-        xknx_version = 'unknown'
-        try:
-            import xknx as _xknx_mod
-            xknx_version = getattr(_xknx_mod, '__version__', 'unknown')
-        except Exception:
-            pass
-
+        xknx_version = _get_xknx_version()
         print(f'[monitor] Connected to {host}:{port}  xknx={xknx_version}', flush=True)
         _emit_safe('monitor_connected', {'host': host, 'port': port,
                                          'xknx_version': xknx_version})
@@ -629,6 +633,30 @@ def _parse_cemi(cemi, source_ip=''):
         pass
 
 
+def _unwrap_dpt(value):
+    """Convert xknx 3.x DPTBinary/DPTArray to plain int or list.
+
+    In xknx 2.x GroupValueWrite.value was already a plain int/list.
+    In xknx 3.x it is wrapped in DPTBinary (int) or DPTArray (tuple).
+    """
+    if value is None:
+        return None
+    try:
+        from xknx.dpt import DPTBinary, DPTArray
+        if isinstance(value, DPTBinary):
+            return value.value          # int
+        if isinstance(value, DPTArray):
+            return list(value.value)    # tuple → list
+    except ImportError:
+        pass
+    # Already plain
+    if isinstance(value, (int, list)):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    return value
+
+
 def _process_telegram(telegram):
     """Process a telegram received from xknx."""
     try:
@@ -638,8 +666,8 @@ def _process_telegram(telegram):
         src = telegram.source_address
         payload = telegram.payload
 
-        dst_int = int(str(dst).replace('/', '').replace('.', ''))
-        # Proper conversion from xknx GroupAddress
+        # Convert xknx GroupAddress string "M/S/D" to integer
+        dst_int = 0
         try:
             dst_str = str(dst)
             parts = [int(p) for p in dst_str.split('/')]
@@ -655,13 +683,13 @@ def _process_telegram(telegram):
 
         if isinstance(payload, GroupValueWrite):
             svc_name = 'Write'
-            raw_value = payload.value
+            raw_value = _unwrap_dpt(payload.value)
         elif isinstance(payload, GroupValueRead):
             svc_name = 'Read'
             raw_value = None
         elif isinstance(payload, GroupValueResponse):
             svc_name = 'Response'
-            raw_value = payload.value
+            raw_value = _unwrap_dpt(payload.value)
         else:
             svc_name = type(payload).__name__
             raw_value = None
@@ -672,7 +700,8 @@ def _process_telegram(telegram):
         _emit_telegram(telegram_info)
 
     except Exception as e:
-        pass
+        import traceback
+        print(f'[monitor] _process_telegram error: {e}\n{traceback.format_exc()}', flush=True)
 
 
 def _build_telegram_info(src_addr, dst_int, dst_addr, service, raw_value, is_group):
