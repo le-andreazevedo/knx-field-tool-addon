@@ -92,6 +92,11 @@ monitor_state = {
     'host': '',
     'port': 3671,
     'telegram_count': 0,
+    # Diagnostic counters — updated inside _async_monitor
+    'cb_invoked': 0,    # times telegram_received callback was called
+    'cb_errors':  0,    # times callback raised an exception
+    'cb_last_error': '',
+    'local_ip': '',     # IP xknx will advertise in the KNX/IP HPAI
 }
 telegram_queue = queue.Queue()  # Thread-safe queue for outgoing telegrams
 
@@ -210,7 +215,11 @@ def monitor_debug():
         'monitor_running': monitor_state['running'],
         'host': monitor_state['host'],
         'port': monitor_state['port'],
+        'local_ip': monitor_state.get('local_ip', ''),
         'telegram_count': monitor_state['telegram_count'],
+        'cb_invoked': monitor_state.get('cb_invoked', 0),
+        'cb_errors':  monitor_state.get('cb_errors', 0),
+        'cb_last_error': monitor_state.get('cb_last_error', ''),
         'buffer_size': len(_telegram_buffer),
         'last_seq': _telegram_seq,
         'xknx_version': _get_xknx_version(),
@@ -392,6 +401,25 @@ async def _async_monitor(host, port, local_ip=None):
         return
 
     try:
+        # Determine the local IP that xknx will use.
+        # In Docker (without host_network) this is the container's bridge IP
+        # (e.g. 172.30.x.x) which the KNX gateway cannot route to — group
+        # telegrams are never delivered.  With host_network: true this becomes
+        # the HA host's real LAN IP and everything works.
+        _detected_local_ip = local_ip or ''
+        if not _detected_local_ip:
+            try:
+                import socket as _sock
+                _s = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
+                _s.connect((host, int(port)))
+                _detected_local_ip = _s.getsockname()[0]
+                _s.close()
+            except Exception:
+                _detected_local_ip = '?'
+        monitor_state['local_ip'] = _detected_local_ip
+        print(f'[monitor] local_ip={_detected_local_ip!r}  (this IP goes into KNX/IP HPAI; '
+              f'gateway must be able to reach it)', flush=True)
+
         conn_config = ConnectionConfig(
             connection_type=ConnectionType.TUNNELING,
             gateway_ip=host,
@@ -402,18 +430,20 @@ async def _async_monitor(host, port, local_ip=None):
         xknx_inst = XKNX(connection_config=conn_config)
         monitor_state['xknx_instance'] = xknx_inst
 
-        # Diagnostic counters
-        _cb_stats = {'invoked': 0, 'errors': 0, 'last_error': ''}
+        # Reset diagnostic counters for this session
+        monitor_state['cb_invoked']    = 0
+        monitor_state['cb_errors']     = 0
+        monitor_state['cb_last_error'] = ''
 
         # xknx 3.x requires an async callback; a sync callback is silently ignored.
         async def telegram_received(telegram):
-            _cb_stats['invoked'] += 1
+            monitor_state['cb_invoked'] += 1
             try:
                 _process_telegram(telegram)
             except Exception as exc:
-                _cb_stats['errors'] += 1
-                _cb_stats['last_error'] = str(exc)
-                print(f'[monitor] callback error #{_cb_stats["errors"]}: {exc}', flush=True)
+                monitor_state['cb_errors'] += 1
+                monitor_state['cb_last_error'] = str(exc)
+                print(f'[monitor] callback error #{monitor_state["cb_errors"]}: {exc}', flush=True)
 
         xknx_inst.telegram_queue.register_telegram_received_cb(telegram_received)
 
@@ -457,8 +487,8 @@ async def _async_monitor(host, port, local_ip=None):
                 pass
             await asyncio.sleep(0.05)
 
-        print(f'[monitor] Stopped. cb_invoked={_cb_stats["invoked"]}  '
-              f'cb_errors={_cb_stats["errors"]}  '
+        print(f'[monitor] Stopped. cb_invoked={monitor_state["cb_invoked"]}  '
+              f'cb_errors={monitor_state["cb_errors"]}  '
               f'buffer={len(_telegram_buffer)}', flush=True)
         await xknx_inst.stop()
 

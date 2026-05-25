@@ -447,6 +447,24 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
 <!-- Toast -->
 <div id="toast"></div>
 
+<!-- Debug modal -->
+<div id="debug-modal" style="display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center" onclick="if(event.target===this)closeDebugPanel()">
+  <div style="background:var(--bg2);border-radius:12px;box-shadow:var(--shadow-lg);width:min(640px,96vw);max-height:80vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span style="font-weight:600;font-size:14px">Monitor Diagnostics</span>
+      <button onclick="closeDebugPanel()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text3);font-size:18px;line-height:1">✕</button>
+    </div>
+    <div style="padding:16px 20px;overflow-y:auto;flex:1">
+      <div id="debug-content" style="font-family:monospace;font-size:12px;white-space:pre-wrap;color:var(--text)">Loading…</div>
+    </div>
+    <div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px">
+      <button class="btn btn-clear" onclick="refreshDebugPanel()" style="font-size:12px;padding:7px 14px">↻ Refresh</button>
+      <span style="font-size:11px;color:var(--text3);align-self:center" id="debug-ts"></span>
+    </div>
+  </div>
+</div>
+
 <!-- Header -->
 <header>
   <img src="/logo-header.png" alt="KNX Field Tool" class="header-logo-img">
@@ -541,6 +559,10 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
         Disconnect
       </button>
       <button class="btn btn-clear" onclick="clearTelegrams()">Clear</button>
+      <button class="btn btn-clear" id="btn-debug" onclick="showDebugPanel()" title="Show diagnostic info">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        Debug
+      </button>
       <div class="monitor-status">
         <div class="status-dot" id="status-dot"></div>
         <span id="status-text">Disconnected</span>
@@ -2102,6 +2124,59 @@ fetch('api/config')
     }
   })
   .catch(() => {});
+
+// ── Debug panel ───────────────────────────────────────────────────────────
+function showDebugPanel() {
+  const modal = document.getElementById('debug-modal');
+  modal.style.display = 'flex';
+  refreshDebugPanel();
+}
+function closeDebugPanel() {
+  document.getElementById('debug-modal').style.display = 'none';
+}
+async function refreshDebugPanel() {
+  const el = document.getElementById('debug-content');
+  el.textContent = 'Loading…';
+  try {
+    const r = await fetch('api/monitor/debug');
+    const d = await r.json();
+    // Pretty-print with helpful labels
+    const lines = [];
+    lines.push(`xknx version    : ${d.xknx_version}`);
+    lines.push(`local_ip (HPAI) : ${d.local_ip || '(not connected yet)'}`);
+    lines.push('');
+    lines.push(`monitor running : ${d.monitor_running}`);
+    lines.push(`gateway         : ${d.host}:${d.port}`);
+    lines.push('');
+    lines.push(`telegram_count  : ${d.telegram_count}  (total received by xknx)`);
+    lines.push(`cb_invoked      : ${d.cb_invoked}  (times callback was called)`);
+    lines.push(`cb_errors       : ${d.cb_errors}`);
+    if (d.cb_last_error) lines.push(`cb_last_error   : ${d.cb_last_error}`);
+    lines.push(`buffer_size     : ${d.buffer_size}  (telegrams in REST poll buffer)`);
+    lines.push(`last_seq        : ${d.last_seq}`);
+    lines.push('');
+    if (d.last_5_telegrams && d.last_5_telegrams.length) {
+      lines.push(`last ${d.last_5_telegrams.length} telegram(s):`);
+      for (const t of d.last_5_telegrams) {
+        lines.push(`  [${t.timestamp}] ${t.source} → ${t.destination} ${t.service} ${t.decoded_value}`);
+      }
+    } else {
+      lines.push('No telegrams in buffer yet.');
+      if (d.monitor_running && d.cb_invoked === 0) {
+        lines.push('');
+        lines.push('⚠  Callback never invoked — gateway is not delivering packets.');
+        lines.push(`   local_ip in HPAI: ${d.local_ip}`);
+        lines.push('   If this is a Docker container IP (172.x / 10.x range that');
+        lines.push('   differs from the KNX gateway subnet), the gateway cannot');
+        lines.push('   reach it.  host_network: true in config.yaml fixes this.');
+      }
+    }
+    el.textContent = lines.join('\n');
+    document.getElementById('debug-ts').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch(e) {
+    el.textContent = 'Error fetching debug info: ' + e.message;
+  }
+}
 
 // ── Auto-restore last project on page load ────────────────────────────────
 fetch('api/project')

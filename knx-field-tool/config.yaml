@@ -1,6 +1,6 @@
 name: "KNX Field Tool"
 description: "Ferramenta de campo KNX — explorador de projecto ETS, monitor de grupo e diagnostico de instalacao."
-version: "1.8.0"
+version: "1.9.0"
 slug: "knx-field-tool"
 url: "https://github.com/le-andreazevedo/knx-field-tool-addon"
 init: false
@@ -13,6 +13,13 @@ arch:
 
 homeassistant_api: false
 hassio_api: false
+
+# host_network is required for KNX/IP Tunneling.
+# Without it, Docker bridge NAT puts the container's internal IP (172.30.x.x)
+# into the KNX/IP HPAI; the gateway then tries to send group telegrams to that
+# IP which it cannot reach from the LAN. With host_network the add-on shares
+# the HA host's real network interface and xknx detects the correct local IP.
+host_network: true
 
 ingress: true
 ingress_port: 8765
