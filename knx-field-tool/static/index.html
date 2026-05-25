@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -441,7 +441,7 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
 <!-- Loading overlay -->
 <div id="loading">
   <div class="spinner"></div>
-  <div class="loading-text">A processar ficheiro...</div>
+  <div class="loading-text">Processing file...</div>
 </div>
 
 <!-- Toast -->
@@ -459,13 +459,13 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
 
 <!-- Tabs -->
 <nav id="nav-tabs">
-  <div class="tab active" data-panel="project" onclick="switchTab(this)">Projecto <span class="badge" id="tab-project-badge"></span></div>
-  <div class="tab" data-panel="topology" onclick="switchTab(this)">Topologia <span class="badge" id="tab-topo-badge"></span></div>
+  <div class="tab active" data-panel="project" onclick="switchTab(this)">Project <span class="badge" id="tab-project-badge"></span></div>
+  <div class="tab" data-panel="topology" onclick="switchTab(this)">Topology <span class="badge" id="tab-topo-badge"></span></div>
   <div class="tab" data-panel="buildings" onclick="switchTab(this)">Buildings <span class="badge" id="tab-bld-badge"></span></div>
   <div class="tab" data-panel="cabinets" onclick="switchTab(this)">Cabinets <span class="badge" id="tab-cab-badge"></span></div>
-  <div class="tab" data-panel="ga" onclick="switchTab(this)">Endereços de Grupo <span class="badge" id="tab-ga-badge"></span></div>
+  <div class="tab" data-panel="ga" onclick="switchTab(this)">Group Addresses <span class="badge" id="tab-ga-badge"></span></div>
   <div class="tab" data-panel="monitor" onclick="switchTab(this)">Group Monitor</div>
-  <div class="tab" data-panel="diagnosis" onclick="switchTab(this)">Diagnóstico</div>
+  <div class="tab" data-panel="diagnosis" onclick="switchTab(this)">Diagnosis</div>
 </nav>
 
 <!-- Main content area -->
@@ -476,15 +476,15 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
     <div id="welcome">
       <div class="welcome-icon">📡</div>
       <div class="welcome-title">KNX Field Tool</div>
-      <div class="welcome-sub">Carregue um ficheiro .knxproj para explorar a topologia, endereços de grupo e monitorizar telegramas KNX em tempo real.</div>
+      <div class="welcome-sub">Load a .knxproj file to explore the topology, group addresses and monitor KNX telegrams in real time.</div>
       <div class="upload-drop" id="drop-zone"
            ondragover="event.preventDefault(); this.classList.add('dragging')"
            ondragleave="this.classList.remove('dragging')"
            ondrop="handleDrop(event)">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#4f8ef7" stroke-width="1.5" style="margin:0 auto"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
-        <div style="margin-top:12px; font-weight:600; color:var(--text2)">Arraste o ficheiro .knxproj aqui</div>
-        <p class="desktop-hint">ou clique em "Abrir .knxproj" no canto superior direito</p>
-        <p class="ios-hint" style="display:none">Toque em <strong style="color:var(--text2)">Abrir .knxproj</strong> no canto superior direito</p>
+        <div style="margin-top:12px; font-weight:600; color:var(--text2)">Drop .knxproj file here</div>
+        <p class="desktop-hint">or click "Open .knxproj" in the top right corner</p>
+        <p class="ios-hint" style="display:none">Tap <strong style="color:var(--text2)">Open .knxproj</strong> in the top right corner</p>
       </div>
     </div>
   </div>
@@ -496,25 +496,25 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
 
   <!-- Topology -->
   <div class="panel" id="panel-topology">
-    <input class="search-bar" id="topo-search" type="text" placeholder="Pesquisar dispositivo, endereço individual, modelo..." oninput="filterTopology(this.value)">
+    <input class="search-bar" id="topo-search" type="text" placeholder="Search device, individual address, model..." oninput="filterTopology(this.value)">
     <div id="topology-content"></div>
   </div>
 
   <!-- Buildings -->
   <div class="panel" id="panel-buildings">
-    <input class="search-bar" id="bld-search" type="text" placeholder="Pesquisar divisão, dispositivo, quadro..." oninput="filterBuildings(this.value)">
+    <input class="search-bar" id="bld-search" type="text" placeholder="Search room, device, cabinet..." oninput="filterBuildings(this.value)">
     <div id="buildings-content"></div>
   </div>
 
   <!-- Cabinets -->
   <div class="panel" id="panel-cabinets">
-    <input class="search-bar" id="cab-search" type="text" placeholder="Pesquisar quadro, dispositivo, endereço individual..." oninput="filterCabinets(this.value)">
+    <input class="search-bar" id="cab-search" type="text" placeholder="Search cabinet, device, individual address..." oninput="filterCabinets(this.value)">
     <div id="cabinets-content"></div>
   </div>
 
   <!-- Group Addresses -->
   <div class="panel" id="panel-ga">
-    <input class="search-bar" id="ga-search" type="text" placeholder="Pesquisar endereço, nome, datapoint..." oninput="filterGA(this.value)">
+    <input class="search-bar" id="ga-search" type="text" placeholder="Search address, name, datapoint..." oninput="filterGA(this.value)">
     <div id="ga-content"></div>
   </div>
 
@@ -534,23 +534,23 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
       <input class="monitor-input monitor-input-sm" id="mon-port" type="text" inputmode="numeric" value="3671"></span>
       <button class="btn btn-connect" id="btn-connect" onclick="monitorConnect()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-        Ligar
+        Connect
       </button>
       <button class="btn btn-disconnect" id="btn-disconnect" onclick="monitorDisconnect()" style="display:none">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
-        Desligar
+        Disconnect
       </button>
-      <button class="btn btn-clear" onclick="clearTelegrams()">Limpar</button>
+      <button class="btn btn-clear" onclick="clearTelegrams()">Clear</button>
       <div class="monitor-status">
         <div class="status-dot" id="status-dot"></div>
-        <span id="status-text">Desligado</span>
+        <span id="status-text">Disconnected</span>
       </div>
     </div>
 
     <!-- Filters -->
     <div class="monitor-filters">
-      <span class="filter-label">Filtro</span>
-      <input class="filter-input" id="mon-filter" type="text" placeholder="Endereço, nome de GA, serviço..." oninput="applyMonitorFilter()">
+      <span class="filter-label">Filter</span>
+      <input class="filter-input" id="mon-filter" type="text" placeholder="Address, GA name, service..." oninput="applyMonitorFilter()">
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);cursor:pointer">
         <input type="checkbox" id="chk-writes" onchange="applyMonitorFilter()" checked>Writes
       </label>
@@ -563,7 +563,7 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3);cursor:pointer">
         <input type="checkbox" id="chk-scroll" checked>Auto-scroll
       </label>
-      <span class="filter-count" id="filter-count">0 telegramas</span>
+      <span class="filter-count" id="filter-count">0 telegrams</span>
     </div>
 
     <!-- Telegram table -->
@@ -572,12 +572,12 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
         <thead>
           <tr>
             <th>#</th>
-            <th>Hora</th>
-            <th>Origem</th>
-            <th>Destino</th>
-            <th>Serviço</th>
-            <th>Nome GA</th>
-            <th>Valor</th>
+            <th>Time</th>
+            <th>Source</th>
+            <th>Destination</th>
+            <th>Service</th>
+            <th>GA Name</th>
+            <th>Value</th>
             <th>DPT</th>
           </tr>
         </thead>
@@ -585,7 +585,7 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
       </table>
       <div id="mon-empty" class="empty">
         <div class="empty-icon">📻</div>
-        <div>Ligue ao gateway KNX para iniciar a monitorização</div>
+        <div>Connect to KNX gateway to start monitoring</div>
       </div>
     </div>
   </div>
@@ -594,11 +594,11 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
   <!-- Diagnosis -->
   <div class="panel" id="panel-diagnosis">
     <div class="card" style="margin-bottom:12px">
-      <div class="card-header">🩺 Diagnóstico de Instalação</div>
+      <div class="card-header">🩺 Installation Diagnosis</div>
       <div class="card-body">
         <p style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.6">
-          Verifica se todos os dispositivos do projecto ETS se encontram online na instalação.
-          Utiliza a ligação activa do Group Monitor ou introduza o IP do gateway abaixo.
+          Checks whether all devices in the ETS project are online.
+          Uses the active Group Monitor connection or enter the gateway IP below.
         </p>
 
         <!-- Gateway config (shown when monitor is not connected) -->
@@ -617,7 +617,7 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
 
         <button class="btn btn-connect" id="diag-start-btn" onclick="startDiagnosis()" style="min-width:160px">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          Iniciar Diagnóstico
+          Start Diagnosis
         </button>
       </div>
     </div>
@@ -627,12 +627,12 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
       <div class="card-body" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
         <div class="spinner" style="width:28px;height:28px;border-width:2px;flex-shrink:0"></div>
         <div style="flex:1;min-width:0">
-          <div id="diag-progress-text" style="font-size:14px;font-weight:600;color:var(--text2)">A verificar dispositivos…</div>
-          <div id="diag-progress-sub" style="font-size:12px;color:var(--text3);margin-top:2px">Aguarde, este processo pode demorar alguns segundos por dispositivo.</div>
+          <div id="diag-progress-text" style="font-size:14px;font-weight:600;color:var(--text2)">Checking devices…</div>
+          <div id="diag-progress-sub" style="font-size:12px;color:var(--text3);margin-top:2px">Please wait, this may take a few seconds per device.</div>
         </div>
         <button class="btn btn-disconnect" id="diag-stop-btn" onclick="stopDiagnosis()" style="flex-shrink:0">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
-          Parar
+          Stop
         </button>
       </div>
     </div>
@@ -669,11 +669,11 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
   </div>
   <button class="bnav-item active" data-panel="project" onclick="switchTabByPanel('project')">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-    Projecto
+    Project
   </button>
   <button class="bnav-item" data-panel="topology" onclick="switchTabByPanel('topology')">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>
-    Topologia
+    Topology
   </button>
   <button class="bnav-item" data-panel="buildings" onclick="switchTabByPanel('buildings')">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M16 7V5a2 2 0 00-4 0v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
@@ -685,7 +685,7 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
   </button>
   <button class="bnav-item" data-panel="ga" onclick="switchTabByPanel('ga')">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-    Endereços
+    Addresses
   </button>
   <button class="bnav-item" data-panel="monitor" onclick="switchTabByPanel('monitor')">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -693,7 +693,7 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
   </button>
   <button class="bnav-item" data-panel="diagnosis" onclick="switchTabByPanel('diagnosis')">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-    Diagnóstico
+    Diagnosis
   </button>
 </nav>
 
@@ -722,7 +722,7 @@ function initSocket() {
 
   socket.on('monitor_connected', (data) => {
     _clearMonConnectTimer();
-    setMonitorStatus('connected', `Ligado: ${data.host}:${data.port}${data.warning ? ' ⚠' : ''}`);
+    setMonitorStatus('connected', `Connected: ${data.host}:${data.port}${data.warning ? ' ⚠' : ''}`);
     if (data.warning) showToast('⚠ ' + data.warning, 'warn');
     document.getElementById('btn-connect').style.display = 'none';
     document.getElementById('btn-disconnect').style.display = 'flex';
@@ -732,7 +732,7 @@ function initSocket() {
   });
 
   socket.on('monitor_stopped', (data) => {
-    setMonitorStatus('disconnected', 'Desligado' + (data && data.reason ? ` (${data.reason})` : ''));
+    setMonitorStatus('disconnected', 'Disconnected' + (data && data.reason ? ` (${data.reason})` : ''));
     document.getElementById('btn-connect').style.display = 'flex';
     document.getElementById('btn-disconnect').style.display = 'none';
     monitorConnected = false;
@@ -741,8 +741,8 @@ function initSocket() {
 
   socket.on('monitor_error', (data) => {
     _clearMonConnectTimer();
-    showToast('Erro: ' + data.message, 'error');
-    setMonitorStatus('disconnected', 'Erro de ligação');
+    showToast('Error: ' + data.message, 'error');
+    setMonitorStatus('disconnected', 'Connection error');
     document.getElementById('btn-connect').style.display = 'flex';
     document.getElementById('btn-disconnect').style.display = 'none';
     monitorConnected = false;
@@ -783,7 +783,7 @@ async function pingDevice(btn, ia) {
   if (btn.classList.contains('pinging')) return;
   btn.classList.remove('online', 'offline');
   btn.classList.add('pinging');
-  btn.title = 'A verificar…';
+  btn.title = 'Checking…';
 
   const body = { address: ia };
   // If no active monitor, try to get gateway from monitor toolbar
@@ -809,16 +809,16 @@ async function pingDevice(btn, ia) {
       btn.title = `Online — ${ia}`;
     } else {
       btn.classList.add('offline');
-      btn.title = `Offline / sem resposta — ${ia}`;
+      btn.title = `Offline / no response — ${ia}`;
     }
     setTimeout(() => {
       btn.classList.remove('online', 'offline');
-      btn.title = 'Verificar se está online';
+      btn.title = 'Check if online';
     }, 10000);
   } catch (e) {
     btn.classList.remove('pinging');
     btn.classList.add('offline');
-    btn.title = `Erro: ${e.message}`;
+    btn.title = `Error: ${e.message}`;
   }
 }
 
@@ -845,7 +845,7 @@ let diagAbortController = null;
 
 async function stopDiagnosis() {
   const stopBtn = document.getElementById('diag-stop-btn');
-  if (stopBtn) { stopBtn.disabled = true; stopBtn.textContent = 'A parar…'; }
+  if (stopBtn) { stopBtn.disabled = true; stopBtn.textContent = 'Stopping…'; }
   try { await fetch('api/diagnose/stop', { method: 'POST' }); } catch(_) {}
 }
 
@@ -853,7 +853,7 @@ async function startDiagnosis() {
   if (diagRunning) return;
 
   if (!projectLoaded) {
-    showToast('Carregue um ficheiro .knxproj primeiro', 'error');
+    showToast('Load a .knxproj file first', 'error');
     return;
   }
 
@@ -864,7 +864,7 @@ async function startDiagnosis() {
   const timeout = parseFloat((document.getElementById('diag-timeout') || {}).value) || 3;
 
   if (!monitorConnected && !host) {
-    showToast('Introduza o IP do gateway ou ligue o Group Monitor', 'error');
+    showToast('Enter the gateway IP or connect the Group Monitor', 'error');
     return;
   }
 
@@ -874,12 +874,12 @@ async function startDiagnosis() {
   const btn     = document.getElementById('diag-start-btn');
   const stopBtn = document.getElementById('diag-stop-btn');
   btn.disabled = true;
-  if (stopBtn) { stopBtn.disabled = false; stopBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg> Parar'; }
+  if (stopBtn) { stopBtn.disabled = false; stopBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg> Stop'; }
   document.getElementById('diag-progress').style.display = 'block';
   document.getElementById('diag-results').style.display = 'none';
-  document.getElementById('diag-progress-text').textContent = 'A verificar dispositivos…';
+  document.getElementById('diag-progress-text').textContent = 'Checking devices…';
   document.getElementById('diag-progress-sub').textContent =
-    'Aguarde, este processo pode demorar alguns segundos por dispositivo.';
+    'Please wait, this may take a few seconds per device.';
 
   const body = { timeout };
   if (!monitorConnected && host) { body.host = host; body.port = port; }
@@ -896,19 +896,19 @@ async function startDiagnosis() {
     document.getElementById('diag-progress').style.display = 'none';
 
     if (d.error) {
-      showToast('Erro: ' + d.error, 'error');
+      showToast('Error: ' + d.error, 'error');
     } else {
-      if (d.aborted) showToast('Diagnóstico interrompido — resultados parciais', 'warning');
+      if (d.aborted) showToast('Diagnosis interrupted — partial results', 'warning');
       renderDiagResults(d.results || [], d.aborted);
     }
   } catch (e) {
     document.getElementById('diag-progress').style.display = 'none';
-    if (e.name !== 'AbortError') showToast('Erro: ' + e.message, 'error');
+    if (e.name !== 'AbortError') showToast('Error: ' + e.message, 'error');
   } finally {
     diagRunning = false;
     diagAbortController = null;
     btn.disabled = false;
-    if (stopBtn) { stopBtn.disabled = false; stopBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg> Parar'; }
+    if (stopBtn) { stopBtn.disabled = false; stopBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg> Stop'; }
   }
 }
 
@@ -922,7 +922,7 @@ function renderDiagResults(results, aborted = false) {
 
   if (total === 0) {
     el.innerHTML = `<div class="card"><div class="card-body">
-      <div class="empty"><div class="empty-icon">📭</div><div>Sem dispositivos para verificar</div></div>
+      <div class="empty"><div class="empty-icon">📭</div><div>No devices to check</div></div>
     </div></div>`;
     return;
   }
@@ -931,7 +931,7 @@ function renderDiagResults(results, aborted = false) {
   const abortedBanner = aborted
     ? `<div style="background:#fff3cd;border:1px solid #ffc107;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#856404;display:flex;align-items:center;gap:8px">
         <span style="font-size:16px">⚠️</span>
-        <span>Diagnóstico interrompido — a mostrar resultados parciais (${total} dispositivos verificados)</span>
+        <span>Diagnosis interrupted — showing partial results (${total} devices checked)</span>
        </div>`
     : '';
 
@@ -941,9 +941,9 @@ function renderDiagResults(results, aborted = false) {
         <div class="card-body" style="text-align:center;padding:28px 20px">
           <div style="font-size:48px;margin-bottom:12px">${aborted ? '⚠️' : '✅'}</div>
           <div style="font-size:18px;font-weight:700;color:var(--success);margin-bottom:6px">
-            ${aborted ? 'Verificados até agora — todos online' : 'Todos os dispositivos estão online'}
+            ${aborted ? 'Checked so far — all online' : 'All devices are online'}
           </div>
-          <div style="font-size:13px;color:var(--text3)">${total} dispositivos verificados · ${ts}</div>
+          <div style="font-size:13px;color:var(--text3)">${total} devices checked · ${ts}</div>
           <div style="margin-top:16px;display:flex;justify-content:center;gap:16px;font-size:13px">
             <span class="pill pill-green">✓ Online: ${online.length}</span>
           </div>
@@ -957,7 +957,7 @@ function renderDiagResults(results, aborted = false) {
     <div class="card" style="margin-bottom:10px">
       <div class="card-body">
         <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
-          <div style="font-size:15px;font-weight:700;color:var(--text2)">Resultado do Diagnóstico</div>
+          <div style="font-size:15px;font-weight:700;color:var(--text2)">Diagnosis Results</div>
           <span class="pill pill-green">✓ Online: ${online.length}</span>
           <span class="pill pill-red">✗ Offline: ${offline.length}</span>
           <span class="pill pill-gray">${total} total</span>
@@ -969,7 +969,7 @@ function renderDiagResults(results, aborted = false) {
     <div class="card" style="margin-bottom:10px">
       <div class="card-header" style="color:var(--error)">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        Dispositivos Offline (${offline.length})
+        Offline Devices (${offline.length})
       </div>
       <div class="card-body" style="padding:0">
         ${offline.map(d => `
@@ -988,7 +988,7 @@ function renderDiagResults(results, aborted = false) {
       <summary style="cursor:pointer;list-style:none;outline:none">
         <div class="card-header" style="border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--success);user-select:none">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-          Dispositivos Online (${online.length}) — clique para expandir
+          Online Devices (${online.length}) — click to expand
         </div>
       </summary>
       <div class="card" style="margin-top:4px">
@@ -1015,7 +1015,7 @@ function switchTabByPanel(panelId) {
 // ─── File upload (desactivado no modo add-on HA) ────────────────────────────
 // O projecto ETS e configurado nas opcoes do add-on (knx_project_file)
 function handleFileSelect(input) {
-  showToast('Configure o ficheiro .knxproj nas opcoes do add-on', 'warn');
+  showToast('Configure the .knxproj file in the add-on options', 'warn');
 }
 function handleDrop(event) { event.preventDefault(); }
 function uploadFile(file) {}
@@ -1026,13 +1026,13 @@ function loadProjectData(data) {
   const proj = data.project;
 
   // Badge
-  document.getElementById('badge-name').textContent = proj.name || 'Projecto';
+  document.getElementById('badge-name').textContent = proj.name || 'Project';
   document.getElementById('project-badge').classList.add('visible');
   // Mostrar nome no bottom-nav (mobile)
   const bnavInfo = document.getElementById('bnav-project-info');
   const bnavName = document.getElementById('bnav-project-name');
   if (bnavInfo && bnavName) {
-    bnavName.textContent = proj.name || 'Projecto';
+    bnavName.textContent = proj.name || 'Project';
     bnavInfo.style.display = 'flex';
   }
 
@@ -1082,33 +1082,33 @@ function renderProjectInfo(proj, data) {
 
   c.innerHTML = `
     <div class="stat-grid" style="margin-bottom:20px">
-      <div class="stat-card"><div class="stat-value">${proj.total_devices || 0}</div><div class="stat-label">Dispositivos</div></div>
-      <div class="stat-card"><div class="stat-value">${proj.total_group_addresses || 0}</div><div class="stat-label">Endereços de Grupo</div></div>
-      <div class="stat-card"><div class="stat-value">${totalLines}</div><div class="stat-label">Linhas KNX</div></div>
-      <div class="stat-card"><div class="stat-value">${(data.ip_connections || []).length}</div><div class="stat-label">Ligações IP</div></div>
+      <div class="stat-card"><div class="stat-value">${proj.total_devices || 0}</div><div class="stat-label">Devices</div></div>
+      <div class="stat-card"><div class="stat-value">${proj.total_group_addresses || 0}</div><div class="stat-label">Group Addresses</div></div>
+      <div class="stat-card"><div class="stat-value">${totalLines}</div><div class="stat-label">KNX Lines</div></div>
+      <div class="stat-card"><div class="stat-value">${(data.ip_connections || []).length}</div><div class="stat-label">IP Connections</div></div>
     </div>
     <div class="card">
-      <div class="card-header">📋 Informação do Projecto</div>
+      <div class="card-header">📋 Project Information</div>
       <div class="card-body">
         <table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <tr><td style="padding:6px 0;color:var(--text3);width:180px">Nome</td><td style="padding:6px 0;font-weight:600">${proj.name || '—'}</td></tr>
-          <tr><td style="padding:6px 0;color:var(--text3)">Última modificação</td><td style="padding:6px 0">${proj.last_modified ? proj.last_modified.replace('T',' ').substring(0,19) : '—'}</td></tr>
-          <tr><td style="padding:6px 0;color:var(--text3)">Início do projecto</td><td style="padding:6px 0">${proj.project_start ? proj.project_start.replace('T',' ').substring(0,19) : '—'}</td></tr>
-          <tr><td style="padding:6px 0;color:var(--text3)">Versão ETS</td><td style="padding:6px 0">${proj.tool_version || '—'}</td></tr>
-          <tr><td style="padding:6px 0;color:var(--text3)">Endereçamento GA</td><td style="padding:6px 0"><span class="pill pill-blue">${proj.ga_style || 'ThreeLevel'}</span></td></tr>
+          <tr><td style="padding:6px 0;color:var(--text3);width:180px">Name</td><td style="padding:6px 0;font-weight:600">${proj.name || '—'}</td></tr>
+          <tr><td style="padding:6px 0;color:var(--text3)">Last modified</td><td style="padding:6px 0">${proj.last_modified ? proj.last_modified.replace('T',' ').substring(0,19) : '—'}</td></tr>
+          <tr><td style="padding:6px 0;color:var(--text3)">Project start</td><td style="padding:6px 0">${proj.project_start ? proj.project_start.replace('T',' ').substring(0,19) : '—'}</td></tr>
+          <tr><td style="padding:6px 0;color:var(--text3)">ETS Version</td><td style="padding:6px 0">${proj.tool_version || '—'}</td></tr>
+          <tr><td style="padding:6px 0;color:var(--text3)">GA Addressing</td><td style="padding:6px 0"><span class="pill pill-blue">${proj.ga_style || 'ThreeLevel'}</span></td></tr>
         </table>
       </div>
     </div>
     ${(data.ip_connections || []).length > 0 ? `
     <div class="card">
-      <div class="card-header">🌐 Ligações IP Detectadas</div>
+      <div class="card-header">🌐 Detected IP Connections</div>
       <div class="card-body">
         ${(data.ip_connections || []).map(ip => `
           <div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border)">
             <span class="pill pill-green">${ip.type}</span>
             <span style="font-family:monospace;color:var(--accent);font-weight:600">${ip.host}:${ip.port}</span>
             ${ip.name ? `<span style="color:var(--text3)">${ip.name}</span>` : ''}
-            <button class="ip-use-btn" onclick="useIPForMonitor('${ip.host}', ${ip.port})" style="margin-left:auto">Usar no Monitor</button>
+            <button class="ip-use-btn" onclick="useIPForMonitor('${ip.host}', ${ip.port})" style="margin-left:auto">Use in Monitor</button>
           </div>`).join('')}
       </div>
     </div>` : ''}
@@ -1125,7 +1125,7 @@ function renderTopology(topology) {
 function renderTopologyFiltered(topology) {
   const c = document.getElementById('topology-content');
   if (!topology || topology.length === 0) {
-    c.innerHTML = '<div class="empty"><div class="empty-icon">🏗</div><div>Sem dados de topologia</div></div>';
+    c.innerHTML = '<div class="empty"><div class="empty-icon">🏗</div><div>No topology data</div></div>';
     return;
   }
   c.innerHTML = topology.map(area => renderArea(area)).join('');
@@ -1139,7 +1139,7 @@ function renderArea(area) {
         <span class="chevron">▶</span>
         <span>${area.address}</span>
         <span style="flex:1">${area.name}</span>
-        <span class="pill pill-gray">${totalDevices} dispositivos</span>
+        <span class="pill pill-gray">${totalDevices} devices</span>
       </div>
       <div class="topo-area-content" style="display:none">
         ${area.lines.map(line => renderLine(line, area.address)).join('')}
@@ -1154,10 +1154,10 @@ function renderLine(line, areaAddr) {
         <span class="chevron">▶</span>
         <span style="font-family:monospace;color:var(--accent);min-width:50px">${areaAddr}.${line.address}</span>
         <span style="flex:1">${line.name}</span>
-        <span class="pill pill-gray">${line.devices.length} disp.</span>
+        <span class="pill pill-gray">${line.devices.length} dev.</span>
       </div>
       <div class="topo-line-content" style="display:none">
-        ${line.devices.length === 0 ? '<div style="padding:8px;color:var(--text3);font-size:12px">Sem dispositivos</div>' :
+        ${line.devices.length === 0 ? '<div style="padding:8px;color:var(--text3);font-size:12px">No devices</div>' :
           line.devices.map(dev => renderDevice(dev)).join('')}
       </div>
     </div>`;
@@ -1176,7 +1176,7 @@ function renderDevice(dev) {
   return `
     <div class="device-row">
       <div class="device-header" onclick="toggleDevice(this, ${hasDetails})">
-        <button class="ping-btn" title="Verificar se está online" onclick="event.stopPropagation();pingDevice(this,'${dev.individual_address}')"><span class="ping-dot"></span></button>
+        <button class="ping-btn" title="Check if online" onclick="event.stopPropagation();pingDevice(this,'${dev.individual_address}')"><span class="ping-dot"></span></button>
         <span class="device-addr">${dev.individual_address}</span>
         <span class="chevron" style="color:var(--text3)">${hasDetails ? '▶' : ''}</span>
         <span class="device-desc">${dev.description || dev.name || '—'}</span>
@@ -1188,7 +1188,7 @@ function renderDevice(dev) {
       <div class="device-detail">
         ${dev.order_number ? `<div style="font-size:11px;color:var(--text3);padding:6px 0">Order: ${dev.order_number}</div>` : ''}
         <table class="co-table">
-          <thead><tr><th>Objecto de Comunicação</th><th>Endereços de Grupo</th></tr></thead>
+          <thead><tr><th>Communication Object</th><th>Group Addresses</th></tr></thead>
           <tbody>
             ${dev.com_objects.map(co => `
               <tr>
@@ -1262,7 +1262,7 @@ function renderCabinets(cabinets) {
 function _renderCabinets(cabinets) {
   const c = document.getElementById('cabinets-content');
   if (!cabinets || cabinets.length === 0) {
-    c.innerHTML = '<div class="empty"><div class="empty-icon">⚡</div><div>Sem quadros eléctricos (DistributionBoard) configurados neste projecto</div></div>';
+    c.innerHTML = '<div class="empty"><div class="empty-icon">⚡</div><div>No electrical cabinets (DistributionBoard) configured in this project</div></div>';
     return;
   }
   c.innerHTML = cabinets.map(cab => renderCabinet(cab)).join('');
@@ -1284,10 +1284,10 @@ function renderCabinet(cab) {
           <div class="cab-title">${escHtml(cab.name)}</div>
           ${bc}
         </div>
-        <span class="cab-devcount">${devCount} disp.</span>
+        <span class="cab-devcount">${devCount} dev.</span>
       </div>
       <div class="cab-body" style="display:none">
-        ${hasDevices ? renderBldDevices(cab.devices) : `<div class="cab-empty">Sem dispositivos directamente neste quadro</div>`}
+        ${hasDevices ? renderBldDevices(cab.devices) : `<div class="cab-empty">No devices directly in this cabinet</div>`}
       </div>
     </div>`;
 }
@@ -1343,7 +1343,7 @@ function renderBuildings(buildings) {
 function _renderBuildings(buildings) {
   const c = document.getElementById('buildings-content');
   if (!buildings || buildings.length === 0) {
-    c.innerHTML = '<div class="empty"><div class="empty-icon">🏗</div><div>Sem estrutura de buildings configurada neste projecto</div></div>';
+    c.innerHTML = '<div class="empty"><div class="empty-icon">🏗</div><div>No building structure configured in this project</div></div>';
     return;
   }
   c.innerHTML = buildings.map(b => renderSpace(b)).join('');
@@ -1357,7 +1357,7 @@ function renderSpace(sp) {
   const hasContent = hasChildren || hasDevices;
 
   const totalDevs = countAllDevices(sp);
-  const devLabel = totalDevs > 0 ? `<span class="bld-devcount">${totalDevs} disp.</span>` : '';
+  const devLabel = totalDevs > 0 ? `<span class="bld-devcount">${totalDevs} dev.</span>` : '';
 
   const chevron = hasContent ? `<span class="chevron" style="color:var(--text3)">▶</span>` : '<span style="width:12px;display:inline-block"></span>';
 
@@ -1392,7 +1392,7 @@ function renderBldDevices(devices) {
       <div class="bld-dev-row">
         <div class="bld-dev-header" onclick="toggleBldDevice(this, ${hasCO})">
           <span class="chevron" style="color:var(--text3)">${hasCO ? '▶' : ''}</span>
-          <button class="ping-btn" title="Verificar se está online" onclick="event.stopPropagation();pingDevice(this,'${dev.individual_address}')"><span class="ping-dot"></span></button>
+          <button class="ping-btn" title="Check if online" onclick="event.stopPropagation();pingDevice(this,'${dev.individual_address}')"><span class="ping-dot"></span></button>
           <span class="bld-dev-ia">${dev.individual_address}</span>
           <span class="bld-dev-desc">${escHtml(label)}</span>
           <span class="bld-dev-model">${escHtml(dev.model || '')}</span>
@@ -1402,7 +1402,7 @@ function renderBldDevices(devices) {
         <div class="bld-dev-detail">
           <div style="font-size:11px;color:var(--text3);padding:4px 0 2px">${escHtml(dev.manufacturer || '')}</div>
           <table class="co-table">
-            <thead><tr><th>Objecto</th><th>Endereços de Grupo</th></tr></thead>
+            <thead><tr><th>Object</th><th>Group Addresses</th></tr></thead>
             <tbody>
               ${dev.com_objects.map(co => `
               <tr>
@@ -1415,7 +1415,7 @@ function renderBldDevices(devices) {
                     data-co-name="${escHtml(co.name)}"
                     data-dev-ia="${dev.individual_address||''}"
                     onclick="openWriteDialog(this.dataset.gaAddr,this.dataset.gaName,this.dataset.coName,this.dataset.gaDpt,this.dataset.devIa)"
-                    title="Escrever em ${escHtml(ga.address)} — ${escHtml(ga.name)}">
+                    title="Write to ${escHtml(ga.address)} — ${escHtml(ga.name)}">
                     <span class="ga-addr">${ga.address}</span>
                     <span class="ga-name">${escHtml(ga.name)}</span>
                     ${ga.dpt ? `<span style="font-size:10px;opacity:.6">${ga.dpt.replace('DPST-','').replace('DPT-','')}</span>` : ''}
@@ -1483,7 +1483,7 @@ function renderGATree(tree) {
 function renderGAFiltered(tree) {
   const c = document.getElementById('ga-content');
   if (!tree || tree.length === 0) {
-    c.innerHTML = '<div class="empty"><div class="empty-icon">📬</div><div>Sem endereços de grupo</div></div>';
+    c.innerHTML = '<div class="empty"><div class="empty-icon">📬</div><div>No group addresses</div></div>';
     return;
   }
   c.innerHTML = '<div class="ga-tree">' + tree.map(r => renderGARange(r, 1)).join('') + '</div>';
@@ -1570,21 +1570,21 @@ function goToGA(addr) {
 function renderIPConnections(connections) {
   const c = document.getElementById('ip-content');
   if (!connections || connections.length === 0) {
-    c.innerHTML = '<div class="empty"><div class="empty-icon">🌐</div><div>Nenhuma ligação IP configurada</div></div>';
+    c.innerHTML = '<div class="empty"><div class="empty-icon">🌐</div><div>No IP connections configured</div></div>';
     return;
   }
 
   c.innerHTML = connections.map(ip => `
     <div class="ip-card">
       <div class="ip-addr">${ip.host}</div>
-      <div style="color:var(--text3);font-size:12px;margin-top:2px">Porta ${ip.port} · ${ip.protocol || 'UDP'}</div>
+      <div style="color:var(--text3);font-size:12px;margin-top:2px">Port ${ip.port} · ${ip.protocol || 'UDP'}</div>
       <div class="ip-meta">
         <span class="pill pill-blue">${ip.type}</span>
         ${ip.name ? `<span class="pill pill-gray">${ip.name}</span>` : ''}
       </div>
       ${ip.raw ? `<div style="font-size:11px;color:var(--text3);margin-top:8px;font-family:monospace">${escHtml(ip.raw)}</div>` : ''}
       <button class="ip-use-btn" onclick="useIPForMonitor('${ip.host}', ${ip.port})">
-        Usar no Group Monitor
+        Use in Group Monitor
       </button>
     </div>`).join('');
 }
@@ -1594,52 +1594,99 @@ function useIPForMonitor(host, port) {
   document.getElementById('mon-port').value = port;
   const monTab = document.querySelector('[data-panel="monitor"]');
   if (monTab) switchTab(monTab);
-  showToast(`Gateway definido: ${host}:${port}`, 'success');
+  showToast(`Gateway set: ${host}:${port}`, 'success');
 }
 
 // ─── Group Monitor ───────────────────────────
-let _monConnectTimer = null;
+// Use REST API for connect/disconnect — more reliable through HA Ingress proxy
+// than SocketIO emit (which can be dropped or delayed by the reverse proxy).
+// SocketIO is still used for receiving real-time telegram events from the server.
 
-function monitorConnect() {
+let _monStatusPoll = null;
+
+function _startMonStatusPoll(host, port) {
+  _stopMonStatusPoll();
+  let attempts = 0;
+  const MAX = 30; // 30 × 1s = 30 s max polling
+  _monStatusPoll = setInterval(async () => {
+    attempts++;
+    try {
+      const r = await fetch('api/monitor/status');
+      const d = await r.json();
+      if (d.running) {
+        _stopMonStatusPoll();
+        setMonitorStatus('connected', `Connected: ${d.host}:${d.port}`);
+        document.getElementById('btn-connect').style.display = 'none';
+        document.getElementById('btn-disconnect').style.display = 'flex';
+        document.getElementById('btn-connect').disabled = false;
+        monitorConnected = true;
+        updateDiagGwRow();
+      } else if (attempts >= MAX) {
+        _stopMonStatusPoll();
+        setMonitorStatus('disconnected', 'Disconnected');
+        document.getElementById('btn-connect').disabled = false;
+        showToast(
+          `No response from gateway at ${host}:${port}.\nCheck that the IP is correct and no other client is connected.`,
+          'error'
+        );
+      }
+    } catch(_) {}
+  }, 1000);
+}
+
+function _stopMonStatusPoll() {
+  if (_monStatusPoll) { clearInterval(_monStatusPoll); _monStatusPoll = null; }
+}
+
+async function monitorConnect() {
   const host = document.getElementById('mon-host').value.trim();
   const port = parseInt(document.getElementById('mon-port').value) || 3671;
 
   if (!host) {
-    showToast('Introduza o endereço IP do gateway KNX', 'error');
+    showToast('Enter the KNX gateway IP address', 'error');
     return;
   }
 
-  setMonitorStatus('connecting', `A ligar a ${host}:${port}…`);
+  setMonitorStatus('connecting', `Connecting to ${host}:${port}…`);
   document.getElementById('btn-connect').disabled = true;
   document.getElementById('mon-empty').style.display = 'flex';
 
-  socket.emit('monitor_start', { host, port });
-
-  // Reabilita botão após 3 s para permitir nova tentativa
-  setTimeout(() => {
-    document.getElementById('btn-connect').disabled = false;
-  }, 3000);
-
-  // Após 14 s sem resposta, mostra dica (o backend dá timeout aos 12 s)
-  clearTimeout(_monConnectTimer);
-  _monConnectTimer = setTimeout(() => {
-    if (!monitorConnected) {
-      setMonitorStatus('connecting', `Sem resposta de ${host}:${port}`);
-      showToast(
-        `Sem resposta do gateway em ${host}:${port}.\nVerifica se o IP está correto e se não há outro cliente ligado.`,
-        'error'
-      );
+  try {
+    const r = await fetch('api/monitor/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ host, port }),
+    });
+    const d = await r.json();
+    if (d.error) {
+      showToast('Error: ' + d.error, 'error');
+      setMonitorStatus('disconnected', 'Connection error');
+      document.getElementById('btn-connect').disabled = false;
+      return;
     }
-  }, 14000);
+    // Backend accepted the request — poll status until xknx connects or times out
+    _startMonStatusPoll(host, port);
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+    setMonitorStatus('disconnected', 'Connection error');
+    document.getElementById('btn-connect').disabled = false;
+  }
 }
 
-function _clearMonConnectTimer() {
-  clearTimeout(_monConnectTimer);
-  _monConnectTimer = null;
-}
+function _clearMonConnectTimer() {} // kept for compatibility with existing event handlers
 
-function monitorDisconnect() {
-  socket.emit('monitor_stop', {});
+async function monitorDisconnect() {
+  _stopMonStatusPoll();
+  try {
+    await fetch('api/monitor/stop', { method: 'POST' });
+  } catch(_) {}
+  // SocketIO monitor_stopped event will update the UI,
+  // but also update immediately in case SocketIO is delayed
+  setMonitorStatus('disconnected', 'Disconnected');
+  document.getElementById('btn-connect').style.display = 'flex';
+  document.getElementById('btn-disconnect').style.display = 'none';
+  monitorConnected = false;
+  updateDiagGwRow();
 }
 
 function setMonitorStatus(state, text) {
@@ -1724,7 +1771,7 @@ function applyMonitorFilter() {
 function updateFilterCount() {
   const tbody = document.getElementById('telegram-body');
   document.getElementById('filter-count').textContent =
-    `${tbody.rows.length} telegramas (total: ${allTelegrams.length})`;
+    `${tbody.rows.length} telegrams (total: ${allTelegrams.length})`;
 }
 
 function clearTelegrams() {
@@ -1806,21 +1853,21 @@ function _setWdStatus(msg, type) {
 function _doSend(value) {
   const address = _writeAddr;
   const dpt     = _writeDpt;
-  if (!address) { _setWdStatus('Endereço inválido', 'error'); return; }
+  if (!address) { _setWdStatus('Invalid address', 'error'); return; }
   if (value === '' || value === null || value === undefined) {
-    _setWdStatus('Introduza um valor', 'error'); return;
+    _setWdStatus('Enter a value', 'error'); return;
   }
 
   const conn = _resolveWriteConn();
   if (!monitorConnected && !conn.host) {
-    _setWdStatus('Configure o IP da IP Interface', 'error'); return;
+    _setWdStatus('Configure the IP Interface IP', 'error'); return;
   }
 
   // Disable all interactive elements while sending
   document.querySelectorAll('#wd-input-area button, #wd-input-area input,#wd-confirm-btn').forEach(el => {
     el.disabled = true;
   });
-  _setWdStatus('A enviar…', 'info');
+  _setWdStatus('Sending…', 'info');
 
   const body = { address, value: String(value), dpt };
   if (conn.host) { body.host = conn.host; body.port = conn.port; }
@@ -1858,7 +1905,7 @@ function openWriteDialog(addr, gaName, coName, dpt, deviceIA) {
   document.getElementById('wd-ganame').textContent  = gaName  || '';
   document.getElementById('wd-coname').textContent  = coName  || '';
   document.getElementById('wd-conn-line').textContent =
-    deviceIA ? 'Endereço individual: ' + deviceIA : '';
+    deviceIA ? 'Individual address: ' + deviceIA : '';
   _setWdStatus('', '');
 
   // ── IP area ────────────────────────────────────────
@@ -1866,7 +1913,7 @@ function openWriteDialog(addr, gaName, coName, dpt, deviceIA) {
   if (monitorConnected) {
     ipArea.innerHTML =
       '<div style="font-size:12px;color:var(--success);margin-bottom:4px">' +
-      '✓ Via Group Monitor activo</div>';
+      '✓ Via active Group Monitor</div>';
   } else {
     // Pre-fill with project IP or monitor inputs
     let h = (document.getElementById('mon-host') || {}).value || '';
@@ -1908,7 +1955,7 @@ function openWriteDialog(addr, gaName, coName, dpt, deviceIA) {
       '<button class="wd-toggle" onclick="this.classList.add(\'selected\');_doSend(0)">' + lbl0 + '</button>' +
       '<button class="wd-toggle" onclick="this.classList.add(\'selected\');_doSend(1)">' + lbl1 + '</button>' +
       '</div>' +
-      '<div class="wd-enter-hint">Toque para enviar imediatamente</div>';
+      '<div class="wd-enter-hint">Tap to send immediately</div>';
 
   } else if (isDptFamily(5)) {
     // ── 1-byte unsigned — slider + number ───────
@@ -1931,12 +1978,12 @@ function openWriteDialog(addr, gaName, coName, dpt, deviceIA) {
       '</div>' +
       '<div class="wd-hint">0 – ' + maxV + (unit ? ' ' + unit : '') + '</div>' +
       '<button class="wd-confirm-btn" id="wd-confirm-btn"' +
-      ' onclick="var v=document.getElementById(\'wd-value\').value.trim();if(v!==\'\')_doSend(v);">Enviar</button>';
+      ' onclick="var v=document.getElementById(\'wd-value\').value.trim();if(v!==\'\')_doSend(v);">Send</button>';
 
   } else if (isDptFamily(3)) {
     // ── 4-bit dimming control ────────────────────
     inputArea.innerHTML =
-      '<div style="margin-bottom:8px;font-size:12px;color:var(--text3)">Velocidade (0=parar)</div>' +
+      '<div style="margin-bottom:8px;font-size:12px;color:var(--text3)">Speed (0=stop)</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">' +
       [0,1,2,3,4,5,6,7].map(function(v){
         return '<button class="wd-toggle" style="flex:1;min-width:40px;padding:10px 4px;font-size:13px"' +
@@ -1947,7 +1994,7 @@ function openWriteDialog(addr, gaName, coName, dpt, deviceIA) {
       '<div style="display:flex;gap:6px">' +
       '<button class="wd-toggle" style="flex:1" onclick="highlightToggle(this);_doSend(0)">Stop</button>' +
       '</div>' +
-      '<div class="wd-enter-hint">Dimming Up/Down por velocidade</div>';
+      '<div class="wd-enter-hint">Dimming Up/Down by speed</div>';
 
   } else if (isDptFamily(9)) {
     // ── 2-byte float ─────────────────────────────
@@ -1964,13 +2011,13 @@ function openWriteDialog(addr, gaName, coName, dpt, deviceIA) {
       (unit9 ? '<span style="font-size:15px;color:var(--text2);font-weight:600">' + unit9 + '</span>' : '') +
       '</div>' +
       '<button class="wd-confirm-btn" id="wd-confirm-btn"' +
-      ' onclick="var v=document.getElementById(\'wd-value\').value.trim();if(v)_doSend(v);">Enviar</button>';
+      ' onclick="var v=document.getElementById(\'wd-value\').value.trim();if(v)_doSend(v);">Send</button>';
     setTimeout(function(){ var el = document.getElementById('wd-value'); if(el) el.focus(); }, 150);
 
   } else {
     // ── Generic numeric ───────────────────────────
     const isFloat = isDptFamily(14) || isDptFamily(15);
-    const hint = 'Valor' + (isFloat ? ' decimal' : ' numérico');
+    const hint = 'Value' + (isFloat ? ' decimal' : ' numeric');
     inputArea.innerHTML =
       '<input class="wd-num-input" id="wd-value" type="text" inputmode="decimal"' +
       ' placeholder="' + hint + '" autocomplete="off"' +
@@ -1979,7 +2026,7 @@ function openWriteDialog(addr, gaName, coName, dpt, deviceIA) {
       'var v=this.value.trim();if(v)_doSend(v);}">' +
       (dpt ? '<div class="wd-hint">' + escHtml(dpt) + '</div>' : '') +
       '<button class="wd-confirm-btn" id="wd-confirm-btn"' +
-      ' onclick="var v=document.getElementById(\'wd-value\').value.trim();if(v)_doSend(v);">Enviar</button>';
+      ' onclick="var v=document.getElementById(\'wd-value\').value.trim();if(v)_doSend(v);">Send</button>';
     setTimeout(function(){ var el = document.getElementById('wd-value'); if(el) el.focus(); }, 150);
   }
 
