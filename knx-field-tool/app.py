@@ -168,11 +168,43 @@ def get_ga_lookup():
 @app.route('/api/monitor/status', methods=['GET'])
 def monitor_status():
     """Get Group Monitor connection status."""
+    xknx_version = 'unknown'
+    try:
+        import xknx as _x
+        xknx_version = getattr(_x, '__version__', 'unknown')
+    except Exception:
+        pass
     return jsonify({
         'running': monitor_state['running'],
         'host': monitor_state['host'],
         'port': monitor_state['port'],
         'telegram_count': monitor_state['telegram_count'],
+        'buffer_size': len(_telegram_buffer),
+        'last_seq': _telegram_seq,
+        'xknx_version': xknx_version,
+    })
+
+
+@app.route('/api/monitor/debug', methods=['GET'])
+def monitor_debug():
+    """Return diagnostic information for troubleshooting."""
+    xknx_version = 'unknown'
+    try:
+        import xknx as _x
+        xknx_version = getattr(_x, '__version__', 'unknown')
+    except Exception:
+        pass
+    with _telegram_buffer_lock:
+        last_5 = list(_telegram_buffer)[-5:]
+    return jsonify({
+        'monitor_running': monitor_state['running'],
+        'host': monitor_state['host'],
+        'port': monitor_state['port'],
+        'telegram_count': monitor_state['telegram_count'],
+        'buffer_size': len(_telegram_buffer),
+        'last_seq': _telegram_seq,
+        'xknx_version': xknx_version,
+        'last_5_telegrams': last_5,
     })
 
 
@@ -360,9 +392,18 @@ async def _async_monitor(host, port, local_ip=None):
         xknx_inst = XKNX(connection_config=conn_config)
         monitor_state['xknx_instance'] = xknx_inst
 
+        # Diagnostic counters
+        _cb_stats = {'invoked': 0, 'errors': 0, 'last_error': ''}
+
         # xknx 3.x requires an async callback; a sync callback is silently ignored.
         async def telegram_received(telegram):
-            _process_telegram(telegram)
+            _cb_stats['invoked'] += 1
+            try:
+                _process_telegram(telegram)
+            except Exception as exc:
+                _cb_stats['errors'] += 1
+                _cb_stats['last_error'] = str(exc)
+                print(f'[monitor] callback error #{_cb_stats["errors"]}: {exc}', flush=True)
 
         xknx_inst.telegram_queue.register_telegram_received_cb(telegram_received)
 
@@ -389,8 +430,18 @@ async def _async_monitor(host, port, local_ip=None):
 
         # Reset buffer and mark as running only after successful connect
         _reset_telegram_buffer()
-        _emit_safe('monitor_connected', {'host': host, 'port': port})
         monitor_state['running'] = True
+
+        xknx_version = 'unknown'
+        try:
+            import xknx as _xknx_mod
+            xknx_version = getattr(_xknx_mod, '__version__', 'unknown')
+        except Exception:
+            pass
+
+        print(f'[monitor] Connected to {host}:{port}  xknx={xknx_version}', flush=True)
+        _emit_safe('monitor_connected', {'host': host, 'port': port,
+                                         'xknx_version': xknx_version})
 
         # Keep running until stop is requested
         while monitor_state['running']:
@@ -402,11 +453,16 @@ async def _async_monitor(host, port, local_ip=None):
                 pass
             await asyncio.sleep(0.05)
 
+        print(f'[monitor] Stopped. cb_invoked={_cb_stats["invoked"]}  '
+              f'cb_errors={_cb_stats["errors"]}  '
+              f'buffer={len(_telegram_buffer)}', flush=True)
         await xknx_inst.stop()
 
     except Exception as e:
         import traceback
-        _emit_safe('monitor_error', {'message': f'Ligação falhou: {str(e)}\n{traceback.format_exc()}'})
+        tb = traceback.format_exc()
+        print(f'[monitor] Exception: {e}\n{tb}', flush=True)
+        _emit_safe('monitor_error', {'message': f'Connection failed: {str(e)}\n{tb}'})
         monitor_state['running'] = False
 
 
