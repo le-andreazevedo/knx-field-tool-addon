@@ -1390,7 +1390,7 @@ def diagnose_devices():
                 if ia and ia != '0.0.0':
                     devices.append({
                         'address': ia,
-                        'name': dev.get('name') or dev.get('description') or ia,
+                        'name': dev.get('description') or dev.get('name') or ia,
                         'manufacturer': dev.get('manufacturer', ''),
                         'line': f"{area.get('name','')} / {line.get('name','')}",
                     })
@@ -1405,7 +1405,9 @@ def diagnose_devices():
         for i, dev in enumerate(devices, 1):
             if diag_abort:
                 break
-            diag_progress = {'current': i, 'total': len(devices), 'name': dev['name']}
+            # suppress name if it fell back to the address (no ETS name/description set)
+            diag_progress = {'current': i, 'total': len(devices),
+                             'name': '' if dev['name'] == dev['address'] else dev['name']}
             r = await _do_ping_async(xknx_inst, dev['address'], timeout)
             r['name'] = dev['name']
             r['manufacturer'] = dev['manufacturer']
