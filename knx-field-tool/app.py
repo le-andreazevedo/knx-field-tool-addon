@@ -1405,9 +1405,7 @@ def diagnose_devices():
         for i, dev in enumerate(devices, 1):
             if diag_abort:
                 break
-            # suppress name if it fell back to the address (no ETS name/description set)
-            diag_progress = {'current': i, 'total': len(devices),
-                             'name': '' if dev['name'] == dev['address'] else dev['name']}
+            diag_progress = {'current': i, 'total': len(devices), 'name': dev['address']}
             r = await _do_ping_async(xknx_inst, dev['address'], timeout)
             r['name'] = dev['name']
             r['manufacturer'] = dev['manufacturer']
