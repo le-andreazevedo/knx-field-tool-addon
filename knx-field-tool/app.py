@@ -1349,7 +1349,8 @@ def ping_device():
 # ──────────────────────────────────────────────
 
 # Flag de abort do diagnóstico (acesso thread-safe — escrita simples de bool em Python é atómica)
-diag_abort = False
+diag_abort    = False
+diag_progress = {'current': 0, 'total': 0, 'name': ''}
 
 
 @app.route('/api/diagnose/stop', methods=['POST'])
@@ -1358,6 +1359,12 @@ def diagnose_stop():
     global diag_abort
     diag_abort = True
     return jsonify({'success': True})
+
+
+@app.route('/api/diagnose/progress', methods=['GET'])
+def diagnose_progress():
+    """Return current diagnosis progress."""
+    return jsonify(diag_progress)
 
 
 @app.route('/api/diagnose', methods=['POST'])
@@ -1392,15 +1399,19 @@ def diagnose_devices():
         return jsonify({'error': 'Sem dispositivos com endereço individual no projecto'}), 400
 
     async def _run_diagnosis(xknx_inst):
+        global diag_progress
+        diag_progress = {'current': 0, 'total': len(devices), 'name': ''}
         results = []
-        for dev in devices:
+        for i, dev in enumerate(devices, 1):
             if diag_abort:
                 break
+            diag_progress = {'current': i, 'total': len(devices), 'name': dev['name']}
             r = await _do_ping_async(xknx_inst, dev['address'], timeout)
             r['name'] = dev['name']
             r['manufacturer'] = dev['manufacturer']
             r['line'] = dev['line']
             results.append(r)
+        diag_progress = {'current': 0, 'total': 0, 'name': ''}
         return results
 
     # Use active monitor connection if available

@@ -707,8 +707,11 @@ button, .tab, .ga-chip, .bld-header, .bld-dev-header,
       <div class="card-body" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
         <div class="spinner" style="width:28px;height:28px;border-width:2px;flex-shrink:0"></div>
         <div style="flex:1;min-width:0">
-          <div id="diag-progress-text" style="font-size:14px;font-weight:600;color:var(--text2)">Checking devices…</div>
-          <div id="diag-progress-sub" style="font-size:12px;color:var(--text3);margin-top:2px">Please wait, this may take a few seconds per device.</div>
+          <div id="diag-progress-text" style="font-size:14px;font-weight:600;color:var(--text2)">Connecting…</div>
+          <div id="diag-progress-sub" style="font-size:12px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+          <div style="margin-top:8px;background:rgba(120,120,128,.12);border-radius:4px;height:4px;overflow:hidden">
+            <div id="diag-progress-bar" style="height:100%;background:var(--accent);border-radius:4px;width:0%;transition:width .3s ease"></div>
+          </div>
         </div>
         <button class="btn btn-disconnect" id="diag-stop-btn" onclick="stopDiagnosis()" style="flex-shrink:0">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
@@ -1063,6 +1066,32 @@ async function stopDiagnosis() {
   try { await fetch('api/diagnose/stop', { method: 'POST' }); } catch(_) {}
 }
 
+let _diagProgressPoll = null;
+
+function _startDiagProgressPoll() {
+  _stopDiagProgressPoll();
+  _diagProgressPoll = setInterval(async () => {
+    try {
+      const r = await fetch('api/diagnose/progress');
+      const d = await r.json();
+      if (d.total > 0) {
+        document.getElementById('diag-progress-text').textContent =
+          `Checking device ${d.current} / ${d.total}`;
+        document.getElementById('diag-progress-sub').textContent =
+          d.name || '';
+        // progress bar width
+        const pct = Math.round(d.current / d.total * 100);
+        const bar = document.getElementById('diag-progress-bar');
+        if (bar) bar.style.width = pct + '%';
+      }
+    } catch(_) {}
+  }, 400);
+}
+
+function _stopDiagProgressPoll() {
+  if (_diagProgressPoll) { clearInterval(_diagProgressPoll); _diagProgressPoll = null; }
+}
+
 async function startDiagnosis() {
   if (diagRunning) return;
 
@@ -1087,9 +1116,12 @@ async function startDiagnosis() {
   if (stopBtn) { stopBtn.disabled = false; stopBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg> Stop'; }
   document.getElementById('diag-progress').style.display = 'block';
   document.getElementById('diag-results').style.display = 'none';
-  document.getElementById('diag-progress-text').textContent = 'Checking devices…';
-  document.getElementById('diag-progress-sub').textContent =
-    'Please wait, this may take a few seconds per device.';
+  document.getElementById('diag-progress-text').textContent = 'Connecting…';
+  document.getElementById('diag-progress-sub').textContent = '';
+  const bar = document.getElementById('diag-progress-bar');
+  if (bar) bar.style.width = '0%';
+
+  _startDiagProgressPoll();
 
   const body = {};
 
@@ -1114,6 +1146,7 @@ async function startDiagnosis() {
     document.getElementById('diag-progress').style.display = 'none';
     if (e.name !== 'AbortError') showToast('Error: ' + e.message, 'error');
   } finally {
+    _stopDiagProgressPoll();
     diagRunning = false;
     diagAbortController = null;
     btn.disabled = false;
