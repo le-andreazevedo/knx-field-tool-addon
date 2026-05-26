@@ -1956,17 +1956,17 @@ function appendTelegramRow(tg) {
     <td class="tg-val">${escHtml(tg.decoded_value || tg.raw_value || '')}</td>
     <td class="tg-dpt">${(tg.dpt || '').replace('DPST-', '').replace('DPT-', '')}</td>
   `;
-  tbody.appendChild(tr);
+  tbody.insertBefore(tr, tbody.firstChild);
 
-  // Limit DOM rows
+  // Limit DOM rows — remove from bottom (oldest entries)
   while (tbody.rows.length > 2000) {
-    tbody.deleteRow(0);
+    tbody.deleteRow(tbody.rows.length - 1);
   }
 
-  // Auto-scroll
+  // Auto-scroll to top (newest telegrams are at the top)
   if (document.getElementById('chk-scroll').checked) {
     const container = document.getElementById('scroll-container');
-    container.scrollTop = container.scrollHeight;
+    container.scrollTop = 0;
   }
 }
 
