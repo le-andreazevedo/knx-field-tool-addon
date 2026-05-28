@@ -1898,6 +1898,14 @@ async function monitorConnect() {
     });
     const d = await r.json();
     if (d.error) {
+      if (d.error === 'Monitor already running') {
+        // Backend still running from a previous session — restore state silently
+        fetch('api/monitor/status')
+          .then(r2 => r2.json())
+          .then(s => _restoreMonitorConnection(s.host || host, s.port || port))
+          .catch(() => _restoreMonitorConnection(host, port));
+        return;
+      }
       showToast('Error: ' + d.error, 'error');
       setMonitorStatus('disconnected', 'Connection error');
       document.getElementById('btn-connect').disabled = false;
@@ -2285,6 +2293,24 @@ function closeWriteDialog() {
 
 // ─── Bootstrap ───────────────────────────────
 initSocket();
+
+// Restore monitor UI state if the backend is already running
+// (e.g. after browser reload, iPad hibernate/wake, or HA ingress reconnect)
+function _restoreMonitorConnection(host, port) {
+  monitorConnected = true;
+  setMonitorStatus('connected', `Connected: ${host}:${port}`);
+  document.getElementById('btn-connect').style.display = 'none';
+  document.getElementById('btn-disconnect').style.display = 'flex';
+  document.getElementById('mon-empty').style.display = 'none';
+  updateDiagInfo();
+  _startTelegramPoll();
+  _startMetricsPoll();
+}
+
+fetch('api/monitor/status')
+  .then(r => r.json())
+  .then(s => { if (s.running && s.host) _restoreMonitorConnection(s.host, s.port); })
+  .catch(() => {});
 
 // Auto-fill gateway IP/port from HA add-on options (if defined)
 // HA add-on config: pre-fill and hide gateway fields if configured
